@@ -2,7 +2,7 @@
 
 ## 1. Contexte et objectif
 
-Automatiser la veille concurrentielle : ingestion, transformation et visualisation de données de marché, sans intervention manuelle récurrente. Cette première itération couvre le Niveau 1 (pipeline fonctionnel end-to-end sur une source réelle) avec une fondation extensible pour les niveaux suivants (scoring, alertes, IaC, monitoring).
+Plateforme SaaS multi-utilisateurs de veille concurrentielle : chaque utilisateur configure lui-même les concurrents/indicateurs qu'il veut suivre ("watchers"), sans rien coder en dur. Cette itération couvre la fondation multi-tenant (auth, isolation par compte) et un chemin bout-en-bout complet pour les watchers de type `price` (scraping générique) et `eurostat` (indicateur public), avec un vrai frontend web.
 
 ## 2. Vue d'ensemble de l'architecture
 
@@ -10,68 +10,98 @@ Automatiser la veille concurrentielle : ingestion, transformation et visualisati
 GitHub (source + CI/CD)
         │
         ▼
-GitHub Actions : lint → tests (ingestion, API) → build images Docker
+GitHub Actions : lint → tests (ingestion, API) → build (airflow/api/frontend)
         │
         ▼
 Docker Compose
  ├── airflow-db (Postgres)       — métadonnées internes Airflow, isolées
- ├── airflow-webserver/scheduler — orchestration du DAG ELT
- ├── app-db (Postgres)           — métadonnées applicatives (datasets, runs)
+ ├── airflow-webserver/scheduler — DAG dynamique watcher_pipeline
+ ├── app-db (Postgres)           — users, watchers, watcher_state, runs, domain_rate_limits
  ├── minio + minio-init          — Data Lake S3-compatible (bronze/silver/gold)
- ├── api (FastAPI)               — expose /health, /datasets, /runs
- └── dashboard (Streamlit)       — lit les Parquet Gold + interroge l'API
+ ├── api (FastAPI)               — auth JWT + CRUD watchers, scopé par utilisateur
+ └── frontend (Next.js)          — signup/login, dashboard, ajout de watcher, graphiques
 ```
 
-## 3. Flux de données (ELT)
+## 3. Modèle de données central : le "watcher"
 
-1. **Extract** — `ingestion/src/ingestion/sources/eurostat.py` interroge l'API Eurostat (format JSON-stat 2.0, aucune clé requise), avec retries exponentiels sur erreurs 429/5xx.
-2. **Load (Bronze)** — `ingestion/src/ingestion/bronze.py` stocke le payload brut, horodaté (`eurostat/{dataset}/{run_ts}.json`), sans transformation. Traçabilité et rejouabilité garanties.
-3. **Transform (Silver)** — `ingestion/src/ingestion/silver.py` parse le JSON-stat (dimensions → coordonnées via index mixed-radix), nettoie (valeurs manquantes, doublons, codes inconnus), type les colonnes, écrit un Parquet dans `silver/`.
-4. **Transform (Gold)** — `ingestion/src/ingestion/gold.py` calcule, par pays, la dernière valeur et sa variation vs. la période précédente (base du futur scoring "changements stratégiques"), écrit deux Parquet (`_timeseries`, `_summary`) dans `gold/`, et journalise le run (`datasets`, `runs`) dans Postgres.
-
-Chaque étape est une tâche Airflow indépendante (`@task`), avec passage de contexte via XCom et retries configurés au niveau du DAG (`airflow/dags/ingestion_pipeline.py`).
-
-## 4. Choix techniques justifiés
-
-| Choix | Justification |
-|---|---|
-| **Eurostat REST API** comme première source | Aucune authentification requise, dataset stable et documenté, illustre le cas d'usage "bases de données publiques" du cahier des charges. Le code est isolé dans `sources/` pour ajouter facilement une 2e source (Google Trends, scraping). |
-| **MinIO** plutôt que S3 réel | Gratuit, exécutable en local, API S3-compatible → migration vers AWS S3/GCS sans changement de code applicatif (seul `storage.py` gère l'endpoint). |
-| **Parquet** pour Silver/Gold | Format colonnaire compressé, interopérable (pandas, DuckDB, Spark), standard en ingénierie de données — contrairement au JSON brut conservé en Bronze. |
-| **Deux bases Postgres distinctes** (`airflow-db`, `app-db`) | Isolation des métadonnées internes d'Airflow et des métadonnées applicatives — évite tout couplage accidentel et simplifie une migration/scaling indépendant de chaque composant. |
-| **Airflow LocalExecutor** | Suffisant pour un DAG séquentiel unique à ce stade ; évite la complexité opérationnelle de CeleryExecutor/Redis tant qu'elle n'est pas justifiée par la charge. |
-| **FastAPI** plutôt que Flask | Typage natif, documentation OpenAPI générée automatiquement (`/docs`), meilleure adéquation avec un stack Python moderne et testable (`TestClient`). |
-| **Streamlit** plutôt que Superset | Mise en place en quelques dizaines de lignes, hébergement gratuit possible (Streamlit Cloud) pour une démo publique — pertinent pour la validation Niveau 1 avant d'envisager Superset si le besoin BI d'entreprise se confirme. |
-| **DuckDB** (usage prévu, pas de service dédié) | Interrogation ad hoc des fichiers Gold sans infrastructure supplémentaire ; introduit uniquement côté consommation (API/dashboard) si des requêtes analytiques plus complexes sont nécessaires. |
-| **uv** pour la gestion des dépendances Python | Résolution et installation nettement plus rapides que pip (utile en CI et en build Docker), lockfiles reproductibles (`uv.lock`) par package (`ingestion/`, `api/`, `dashboard/`), et environnements virtuels isolés par service. |
-
-## 5. Modèle de données (app-db)
+Un `watcher` est ce qu'un utilisateur veut suivre — généralisation du dataset unique de la v1 :
 
 ```sql
-datasets (dataset_code PK, latest_gold_timeseries_key, latest_gold_summary_key, updated_at)
-runs (id PK, run_ts, dataset_code, status, records_count, gold_key, created_at)
+watchers (id PK, user_id FK, watcher_type, name, config JSONB, is_active, schedule, ...)
+watcher_state (watcher_id PK/FK, latest_gold_timeseries_key, latest_gold_summary_key, updated_at)
+runs (id PK, watcher_id FK, run_ts, status, error_message, records_count, gold_key, created_at)
 ```
+
+`config` est validé côté API par une union discriminée Pydantic (`api/app/schemas.py`) selon `watcher_type` :
+- `price` : `{url, css_selector, currency}` — scraping générique
+- `trend` : `{keyword, geo, timeframe}` — Google Trends *(schéma prêt, pipeline non câblé dans cette itération)*
+- `eurostat` : `{dataset_code, filters}` — généralisation du cas d'usage v1 (plus de valeur hardcodée)
 
 Voir [infra/postgres/init.sql](../infra/postgres/init.sql).
 
-## 6. CI/CD
+## 4. Flux de données (ELT), généralisé par watcher
+
+Les clés MinIO sont partitionnées `{watcher_type}/{watcher_id}/{run_ts}...` (au lieu de `eurostat/{dataset_code}/...` en v1) — isolation naturelle par id numérique, jamais deviné/partagé entre utilisateurs.
+
+1. **Bronze** (`ingestion/src/ingestion/bronze.py`) — dispatcher `ingest_watcher_to_bronze(watcher, run_ts)` : scrape (`sources/price_scraper.py`, avec vérification robots.txt et rate-limit par domaine) ou appelle l'API Eurostat, stocke le payload brut.
+2. **Silver** (`silver.py`) — dispatcher `transform_bronze_to_silver` : nettoie/type selon le type de watcher.
+3. **Gold** (`gold.py`) — dispatcher `transform_silver_to_gold` : pour `eurostat`, le silver contient déjà tout l'historique (comme en v1) ; pour `price`, **chaque run n'observe qu'un seul point** — la zone Gold accumule donc tous les fichiers silver historiques du watcher (`price_silver_to_gold`) pour reconstruire la série temporelle complète. Écrit les métadonnées de run en Postgres, scopées au watcher (donc au propriétaire).
+
+## 5. Orchestration Airflow : un DAG dynamique plutôt qu'un DAG par watcher
+
+`airflow/dags/watcher_pipeline.py` tourne `@hourly` et utilise le **dynamic task mapping** (Airflow 2.9, `.expand()`) :
+1. `list_due_watchers` interroge Postgres (`ingestion/src/ingestion/scheduling.py::get_due_watchers`) et filtre, pour chaque watcher actif, si son propre `schedule` (cron string ou preset `@daily`/`@hourly`/...) est "dû" depuis son dernier run (via `croniter`).
+2. `ingest`/`to_silver`/`to_gold` sont mappés dynamiquement sur la liste de watchers dus — un run Airflow, N task instances, chacune indépendamment observable/réessayable dans l'UI.
+3. Chaque étape journalise un run `failed` avec message d'erreur avant de re-lever l'exception, pour qu'un watcher en échec (site changé, sélecteur invalide) n'impacte ni les autres watchers ni la visibilité de l'échec.
+
+Alternative écartée : un DAG par watcher (créé/détruit dynamiquement) ou un déclenchement direct par l'API — aurait dupliqué la logique de retry/observabilité qu'Airflow fournit déjà, pour un gain marginal à l'échelle visée (LocalExecutor, un seul nœud).
+
+## 6. Authentification et isolation multi-tenant
+
+- JWT fait main (`bcrypt` + `python-jose`, `api/app/auth.py`) plutôt que `fastapi-users` : cohérent avec le style minimal/explicite déjà en place, contrôle total sur la forme de `users`.
+- Isolation appliquée **au niveau API** : chaque requête sur `/watchers`, `/runs` filtre `WHERE user_id = current_user.id` (via jointure). Pas de Row-Level Security Postgres dans cette itération — limite documentée, à durcir si le nombre d'utilisateurs/la sensibilité des données l'exige.
+- Le frontend ne lit jamais MinIO directement (contrairement au dashboard Streamlit de la v1) : tout passe par l'API (`/watchers/{id}/timeseries`, `/summary`), qui applique l'isolation avant de lire le Parquet.
+
+## 7. Scraping générique : éthique et fiabilité
+
+Le watcher `price` scrape une URL fournie par l'utilisateur — pas un site fixe — donc :
+- `ingestion/src/ingestion/robots.py` vérifie le `robots.txt` du domaine avant chaque requête (levée d'exception explicite si interdit, jamais un skip silencieux).
+- `ingestion/src/ingestion/ratelimit.py` impose un délai minimal par domaine, **persisté en Postgres** (`domain_rate_limits`) car Airflow LocalExecutor exécute chaque tâche dans un process séparé — un limiteur en mémoire ne serait pas partagé entre tâches concurrentes.
+- User-Agent honnête (`MarketIntelligenceHub/1.0`, avec contact), pas de spoofing de navigateur.
+- Le frontend affiche un avertissement + rappelle que la responsabilité de la légalité du scraping d'un site donné incombe à l'utilisateur qui configure l'URL.
+
+## 8. Choix techniques justifiés (compléments v1)
+
+| Choix | Justification |
+|---|---|
+| **`ingestion` en dépendance de chemin (`uv.sources`) pour l'API** | L'API a besoin de lire les Parquet Gold depuis MinIO (`storage.py`) ; réutiliser le package plutôt que dupliquer ~10 lignes de client boto3. Le venv de l'API reste indépendant de celui d'Airflow (pas de contrainte de version partagée). |
+| **Contrainte Airflow 2.9.3 respectée pour toute nouvelle dépendance `ingestion`** | `beautifulsoup4`, `croniter` ajoutés en vérifiant qu'ils sont résolvables sous `constraints-2.9.3/constraints-3.11.txt` (notamment SQLAlchemy 1.4.x) — cf. incident déjà rencontré en v1 lors de la migration vers `uv`. |
+| **Next.js (App Router) + Tailwind + Recharts** plutôt que Streamlit | Un vrai produit multi-page (login/dashboard/formulaire/détail) avec une UX soignée ; Streamlit ne permettait pas des formulaires de configuration ni une navigation par utilisateur satisfaisants. |
+| **JWT stocké côté client (`localStorage`)** plutôt que cookie httpOnly | Simplicité pour cette itération ; limitation connue (exposition XSS) documentée comme item de durcissement futur plutôt que sur-ingénierie immédiate. |
+| **`bcrypt` direct plutôt que `passlib`** | `passlib[bcrypt]` a un bug de compatibilité connu avec les versions récentes de `bcrypt` (détection de version cassée) ; appel direct à la lib `bcrypt`, plus simple et sans cette classe de bug. |
+
+## 9. CI/CD
 
 `.github/workflows/ci.yml` — déclenché sur push/PR vers `main` :
 1. `lint` — Ruff sur `ingestion/` et `api/`.
-2. `test-ingestion` / `test-api` — Pytest, entièrement mockés (aucune dépendance réseau ou base de données réelle en CI).
-3. `build` — build Docker des 3 images (`airflow`, `api`, `dashboard`) en matrice, garantissant que chaque Dockerfile reste buildable à chaque changement.
+2. `test-ingestion` / `test-api` — Pytest, entièrement mockés (aucune dépendance réseau, DB ou MinIO réelle en CI).
+3. `frontend-build` — `npm ci && npm run build` (Next.js).
+4. `build` — build Docker des images `airflow`, `api`, `frontend` en matrice.
 
-## 7. Accès aux services (environnement local)
+## 10. Accès aux services (environnement local)
 
 | Service | URL |
 |---|---|
+| Frontend | http://localhost:3000 |
 | Airflow UI | http://localhost:8080 (admin/admin) |
 | API (Swagger) | http://localhost:8000/docs |
-| Dashboard Streamlit | http://localhost:8501 |
 | Console MinIO | http://localhost:9001 (minioadmin/minioadmin123) |
 
-## 8. Limites connues et évolutions prévues (bonus)
+## 11. Limites connues et évolutions prévues
 
-- **Niveau 2** : scoring de détection de changement significatif (déjà amorcé via le calcul `delta` en zone Gold) + alertes Slack/Email sur seuil dépassé.
-- **Niveau 3** : Terraform pour déploiement cloud (S3/RDS managés), Prometheus/Grafana pour le monitoring des DAGs et services, Great Expectations pour la validation de qualité des données en zone Silver.
-- Ajout de sources supplémentaires (Google Trends via `pytrends`, scraping de sites concurrents) en suivant le même pattern `sources/<nouvelle_source>.py`.
+- Watcher `trend` (Google Trends) : schéma prêt, pipeline non câblé.
+- Isolation par API seulement (pas de Row-Level Security Postgres).
+- Pas de refresh token / révocation de token.
+- Granularité minimale du scheduling : 1h (le DAG tourne `@hourly`) — suffisant pour prix/tendances, à revoir si un besoin infra-horaire apparaît.
+- Alertes Slack/Email sur variation significative (le calcul `delta` existe déjà en zone Gold, il ne reste qu'à le brancher sur une notification).
+- Terraform, Prometheus/Grafana, Great Expectations : toujours pertinents, non abordés dans cette itération.

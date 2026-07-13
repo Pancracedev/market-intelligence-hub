@@ -1,31 +1,95 @@
-"""Bronze zone: dump raw source payloads to the data lake, untouched, timestamped."""
+"""Bronze zone: dump raw source payloads to the data lake, untouched, timestamped.
+
+Object keys are partitioned by `{watcher_type}/{watcher_id}/{run_ts}...` rather than a
+hardcoded dataset code - this naturally isolates each user's watcher data (watcher_id is
+never guessable/shared across users) while keeping the existing zone-prefix pattern that
+`storage.list_keys`/`latest_key` already rely on.
+"""
 
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
 from .sources.eurostat import fetch_dataset
+from .sources.price_scraper import fetch_price
 from .storage import ensure_bucket, get_client, put_json
 
 BRONZE_BUCKET = os.environ.get("MINIO_BUCKET_BRONZE", "bronze")
 
 
-def ingest_eurostat_to_bronze(dataset_code: str, run_ts: str, filters: dict | None = None) -> str:
-    """Fetch a Eurostat dataset and store the raw JSON-stat payload in the bronze zone.
-
-    Args:
-        dataset_code: Eurostat dataset identifier (e.g. "prc_hicp_manr").
-        run_ts: ISO-8601-safe timestamp string identifying this pipeline run (e.g. "20260713T120000").
-        filters: Optional Eurostat query filters (e.g. {"geo": "FR"}).
-
-    Returns:
-        The object key written in the bronze bucket.
-    """
+def ingest_eurostat_to_bronze(
+    watcher_id: int, dataset_code: str, run_ts: str, filters: dict | None = None
+) -> str:
+    """Fetch a Eurostat dataset and store the raw JSON-stat payload in the bronze zone."""
     payload = fetch_dataset(dataset_code, filters=filters)
 
     client = get_client()
     ensure_bucket(client, BRONZE_BUCKET)
 
-    key = f"eurostat/{dataset_code}/{run_ts}.json"
+    key = f"eurostat/{watcher_id}/{run_ts}.json"
     put_json(client, BRONZE_BUCKET, key, payload)
     return key
+
+
+def ingest_price_to_bronze(
+    watcher_id: int,
+    url: str,
+    css_selector: str,
+    run_ts: str,
+    currency: str = "EUR",
+    stock_selector: str | None = None,
+    promo_selector: str | None = None,
+) -> str:
+    """Scrape a user-supplied product page (price, and optionally stock/promo) and store
+    the raw extracted values in the bronze zone."""
+    record = fetch_price(
+        url,
+        css_selector,
+        currency=currency,
+        stock_selector=stock_selector,
+        promo_selector=promo_selector,
+    )
+
+    client = get_client()
+    ensure_bucket(client, BRONZE_BUCKET)
+
+    payload = {
+        "url": record.url,
+        "css_selector": record.css_selector,
+        "raw_text": record.raw_text,
+        "value": record.value,
+        "currency": record.currency,
+        "in_stock": record.in_stock,
+        "stock_text": record.stock_text,
+        "original_value": record.original_value,
+        "is_promo": record.is_promo,
+        "discount_pct": record.discount_pct,
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
+    }
+    key = f"price/{watcher_id}/{run_ts}.json"
+    put_json(client, BRONZE_BUCKET, key, payload)
+    return key
+
+
+def ingest_watcher_to_bronze(watcher: dict, run_ts: str) -> str:
+    """Dispatch bronze ingestion based on `watcher["watcher_type"]`."""
+    watcher_id = watcher["id"]
+    config = watcher["config"]
+    watcher_type = watcher["watcher_type"]
+
+    if watcher_type == "eurostat":
+        return ingest_eurostat_to_bronze(
+            watcher_id, config["dataset_code"], run_ts, filters=config.get("filters")
+        )
+    if watcher_type == "price":
+        return ingest_price_to_bronze(
+            watcher_id,
+            config["url"],
+            config["css_selector"],
+            run_ts,
+            currency=config.get("currency", "EUR"),
+            stock_selector=config.get("stock_selector"),
+            promo_selector=config.get("promo_selector"),
+        )
+    raise ValueError(f"Unsupported watcher_type for bronze ingestion: {watcher_type!r}")

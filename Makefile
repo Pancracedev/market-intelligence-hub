@@ -21,7 +21,6 @@ build:
 sync:
 	cd ingestion && uv sync
 	cd api && uv sync
-	cd dashboard && uv sync
 
 test-ingestion:
 	cd ingestion && uv sync && uv run pytest tests -v
@@ -36,4 +35,4 @@ lint:
 	cd api && uv run ruff check app tests
 
 dag-trigger:
-	docker compose exec airflow-webserver airflow dags trigger market_intelligence_pipeline
+	docker compose exec airflow-webserver airflow dags trigger watcher_pipeline

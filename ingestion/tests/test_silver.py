@@ -1,4 +1,4 @@
-from ingestion.silver import bronze_records_to_dataframe
+from ingestion.silver import bronze_records_to_dataframe, price_bronze_to_dataframe
 from ingestion.sources.eurostat import EurostatRecord
 
 
@@ -29,3 +29,16 @@ def test_bronze_records_to_dataframe_drops_duplicates():
 def test_bronze_records_to_dataframe_empty_input():
     df = bronze_records_to_dataframe([])
     assert df.empty
+
+
+def test_price_bronze_to_dataframe_shape():
+    payload = {
+        "url": "https://shop.example.com/product/42",
+        "value": 19.99,
+        "currency": "EUR",
+        "scraped_at": "2026-01-01T00:00:00+00:00",
+    }
+    df = price_bronze_to_dataframe(payload)
+    assert len(df) == 1
+    assert df.iloc[0]["value"] == 19.99
+    assert df.iloc[0]["currency"] == "EUR"

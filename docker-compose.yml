@@ -19,7 +19,6 @@ x-airflow-common: &airflow-common
     APP_DB_NAME: "${APP_DB_NAME:-market_intelligence}"
     APP_DB_HOST: "app-db"
     APP_DB_PORT: "5432"
-    EUROSTAT_DATASET_CODE: "${EUROSTAT_DATASET_CODE:-prc_hicp_manr}"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow_logs:/opt/airflow/logs
@@ -141,7 +140,8 @@ services:
 
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
     environment:
       APP_DB_USER: "${APP_DB_USER:-app}"
       APP_DB_PASSWORD: "${APP_DB_PASSWORD:-app}"
@@ -152,6 +152,8 @@ services:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin123}"
       MINIO_BUCKET_GOLD: "${MINIO_BUCKET_GOLD:-gold}"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:-change-me-in-production}"
+      SEED_DEMO_USER: "${SEED_DEMO_USER:-true}"
     ports:
       - "8000:8000"
     depends_on:
@@ -165,20 +167,15 @@ services:
     networks:
       - mih-network
 
-  dashboard:
+  frontend:
     build:
-      context: ./dashboard
+      context: ./frontend
     environment:
-      MINIO_ENDPOINT: "minio:9000"
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin123}"
-      MINIO_BUCKET_GOLD: "${MINIO_BUCKET_GOLD:-gold}"
-      API_BASE_URL: "http://api:8000"
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000"
     ports:
-      - "8501:8501"
+      - "3000:3000"
     depends_on:
       - api
-      - minio-init
     networks:
       - mih-network
 

@@ -10,6 +10,8 @@ dependencies = [
     "pyarrow>=15.0",
     "sqlalchemy>=1.4",
     "psycopg2-binary>=2.9",
+    "beautifulsoup4>=4.12",
+    "croniter>=2.0",
 ]
 
 [dependency-groups]
