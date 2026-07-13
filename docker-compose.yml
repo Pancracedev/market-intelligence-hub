@@ -19,6 +19,12 @@ x-airflow-common: &airflow-common
     APP_DB_NAME: "${APP_DB_NAME:-market_intelligence}"
     APP_DB_HOST: "app-db"
     APP_DB_PORT: "5432"
+    SMTP_HOST: "${SMTP_HOST:-}"
+    SMTP_PORT: "${SMTP_PORT:-587}"
+    SMTP_USER: "${SMTP_USER:-}"
+    SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+    SMTP_FROM: "${SMTP_FROM:-}"
+    SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow_logs:/opt/airflow/logs

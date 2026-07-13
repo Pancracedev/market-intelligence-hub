@@ -17,9 +17,14 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    slack_webhook_url: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserSettingsUpdate(BaseModel):
+    slack_webhook_url: str | None = None
 
 
 class PriceConfig(BaseModel):
@@ -54,6 +59,9 @@ class WatcherCreate(BaseModel):
     name: str
     config: WatcherConfig
     schedule: str = "@daily"
+    alert_price_drop_pct: float | None = Field(default=None, gt=0, le=100)
+    alert_on_stock_out: bool = True
+    alert_on_promo: bool = True
 
     @model_validator(mode="after")
     def check_type_matches_config(self) -> "WatcherCreate":
@@ -67,6 +75,9 @@ class WatcherUpdate(BaseModel):
     config: WatcherConfig | None = None
     schedule: str | None = None
     is_active: bool | None = None
+    alert_price_drop_pct: float | None = Field(default=None, gt=0, le=100)
+    alert_on_stock_out: bool | None = None
+    alert_on_promo: bool | None = None
 
 
 class WatcherResponse(BaseModel):
@@ -76,10 +87,24 @@ class WatcherResponse(BaseModel):
     config: dict
     is_active: bool
     schedule: str
+    alert_price_drop_pct: float | None = None
+    alert_on_stock_out: bool
+    alert_on_promo: bool
     created_at: datetime
     updated_at: datetime
     latest_gold_timeseries_key: str | None = None
     latest_gold_summary_key: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    watcher_id: int
+    alert_type: str
+    channel: str
+    message: str
+    sent_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

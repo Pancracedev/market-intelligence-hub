@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..db import get_db
-from ..models import Run, User, Watcher
-from ..schemas import RunResponse, WatcherCreate, WatcherResponse, WatcherUpdate
+from ..models import NotificationLog, Run, User, Watcher
+from ..schemas import NotificationResponse, RunResponse, WatcherCreate, WatcherResponse, WatcherUpdate
 from ..storage_reader import read_gold_parquet_records
 
 router = APIRouter(prefix="/watchers", tags=["watchers"])
@@ -22,6 +22,9 @@ def _to_response(watcher: Watcher) -> WatcherResponse:
         config=watcher.config,
         is_active=watcher.is_active,
         schedule=watcher.schedule,
+        alert_price_drop_pct=watcher.alert_price_drop_pct,
+        alert_on_stock_out=watcher.alert_on_stock_out,
+        alert_on_promo=watcher.alert_on_promo,
         created_at=watcher.created_at,
         updated_at=watcher.updated_at,
         latest_gold_timeseries_key=state.latest_gold_timeseries_key if state else None,
@@ -59,6 +62,9 @@ def create_watcher(
         name=payload.name,
         config=payload.config.model_dump(),
         schedule=payload.schedule,
+        alert_price_drop_pct=payload.alert_price_drop_pct,
+        alert_on_stock_out=payload.alert_on_stock_out,
+        alert_on_promo=payload.alert_on_promo,
         created_at=now,
         updated_at=now,
     )
@@ -93,6 +99,12 @@ def update_watcher(
         watcher.schedule = payload.schedule
     if payload.is_active is not None:
         watcher.is_active = payload.is_active
+    if payload.alert_price_drop_pct is not None:
+        watcher.alert_price_drop_pct = payload.alert_price_drop_pct
+    if payload.alert_on_stock_out is not None:
+        watcher.alert_on_stock_out = payload.alert_on_stock_out
+    if payload.alert_on_promo is not None:
+        watcher.alert_on_promo = payload.alert_on_promo
     watcher.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(watcher)
@@ -134,6 +146,23 @@ def get_watcher_summary(
     if state is None or not state.latest_gold_summary_key:
         return []
     return read_gold_parquet_records(state.latest_gold_summary_key)
+
+
+@router.get("/{watcher_id}/alerts", response_model=list[NotificationResponse])
+def list_watcher_alerts(
+    watcher_id: int,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[NotificationResponse]:
+    _get_owned_watcher(watcher_id, current_user, db)
+    stmt = (
+        select(NotificationLog)
+        .where(NotificationLog.watcher_id == watcher_id)
+        .order_by(NotificationLog.sent_at.desc())
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 runs_router = APIRouter(prefix="/runs", tags=["runs"])

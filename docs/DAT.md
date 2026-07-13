@@ -97,11 +97,24 @@ Le watcher `price` scrape une URL fournie par l'utilisateur — pas un site fixe
 | API (Swagger) | http://localhost:8000/docs |
 | Console MinIO | http://localhost:9001 (minioadmin/minioadmin123) |
 
-## 11. Limites connues et évolutions prévues
+## 11. Alertes (email / Slack)
+
+Chaque watcher `price` porte trois règles optionnelles (`alert_price_drop_pct`, `alert_on_stock_out`, `alert_on_promo`). Après chaque run réussi, `ingestion/src/ingestion/alerts.py::evaluate_and_notify` compare l'observation courante à la précédente (déjà calculées par `build_summary_single_series` en zone Gold) et déclenche une notification **uniquement sur transition** :
+- baisse de prix : delta négatif dont le pourcentage dépasse le seuil configuré ;
+- rupture de stock : `in_stock` passe de `True` à `False` (pas de spam si le produit reste indisponible d'un run à l'autre) ;
+- promotion : `is_promo` passe de `False`/absent à `True`.
+
+Deux canaux, `ingestion/src/ingestion/notifications.py` :
+- **Email** : toujours envoyé à l'adresse du compte si `SMTP_HOST` est configuré (sinon no-op documenté, pas d'erreur) — aucune configuration côté utilisateur.
+- **Slack** : simple POST vers le webhook entrant que l'utilisateur configure lui-même dans `/settings` (`users.slack_webhook_url`) — fonctionne immédiatement, sans clé API à gérer côté plateforme.
+
+Chaque notification effectivement envoyée est journalisée dans `notifications_log` (exposée via `GET /watchers/{id}/alerts`) pour que l'utilisateur voie ce qui a été envoyé, sans avoir à déduire un historique depuis les runs.
+
+## 12. Limites connues et évolutions prévues
 
 - Watcher `trend` (Google Trends) : schéma prêt, pipeline non câblé.
 - Isolation par API seulement (pas de Row-Level Security Postgres).
 - Pas de refresh token / révocation de token.
 - Granularité minimale du scheduling : 1h (le DAG tourne `@hourly`) — suffisant pour prix/tendances, à revoir si un besoin infra-horaire apparaît.
-- Alertes Slack/Email sur variation significative (le calcul `delta` existe déjà en zone Gold, il ne reste qu'à le brancher sur une notification).
+- Comparaison multi-concurrents par produit + suggestion de prix optimal (identifié comme prochaine étape à plus fort impact).
 - Terraform, Prometheus/Grafana, Great Expectations : toujours pertinents, non abordés dans cette itération.

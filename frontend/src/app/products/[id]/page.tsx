@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, ApiError, type Product, type ProductSummary, type PricePoint, type Run } from "@/lib/api";
+import { api, ApiError, type AlertEvent, type Product, type ProductSummary, type PricePoint, type Run } from "@/lib/api";
 import Header from "@/components/Header";
 import PriceChart from "@/components/PriceChart";
 import RunHistoryTable from "@/components/RunHistoryTable";
+import AlertHistoryList from "@/components/AlertHistoryList";
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
@@ -23,6 +24,7 @@ export default function ProductDetailPage() {
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [summary, setSummary] = useState<ProductSummary | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -31,6 +33,7 @@ export default function ProductDetailPage() {
     api.getProductHistory(productId).then(setHistory).catch(() => {});
     api.getProductSummary(productId).then((rows) => setSummary(rows[0] ?? null)).catch(() => {});
     api.listRuns(productId).then(setRuns).catch(() => {});
+    api.listAlerts(productId).then(setAlerts).catch(() => {});
   }, [productId]);
 
   async function handleDelete() {
@@ -157,12 +160,21 @@ export default function ProductDetailPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="text-sm font-medium">Historique des vérifications</CardTitle>
               </CardHeader>
               <CardContent>
                 <RunHistoryTable runs={runs} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Alertes envoyées</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AlertHistoryList alerts={alerts} />
               </CardContent>
             </Card>
           </>

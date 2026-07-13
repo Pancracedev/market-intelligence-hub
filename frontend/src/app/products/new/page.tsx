@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ShieldAlert } from "lucide-react";
+import { ArrowLeft, BellRing, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
@@ -29,6 +30,9 @@ export default function NewProductPage() {
   const [promoSelector, setPromoSelector] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [schedule, setSchedule] = useState("@daily");
+  const [alertPriceDropPct, setAlertPriceDropPct] = useState("10");
+  const [alertOnStockOut, setAlertOnStockOut] = useState(true);
+  const [alertOnPromo, setAlertOnPromo] = useState(true);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -43,6 +47,9 @@ export default function NewProductPage() {
         schedule,
         stockSelector: stockSelector || undefined,
         promoSelector: promoSelector || undefined,
+        alertPriceDropPct: alertPriceDropPct ? Number(alertPriceDropPct) : undefined,
+        alertOnStockOut,
+        alertOnPromo,
       });
       toast.success("Produit ajouté à votre veille");
       router.push(`/products/${product.id}`);
@@ -180,6 +187,47 @@ export default function NewProductPage() {
                   placeholder=".was-price, .price--strikethrough..."
                   className="font-mono"
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BellRing className="h-4 w-4" />
+                Alertes
+              </CardTitle>
+              <CardDescription>
+                Soyez notifié par email (et Slack si configuré dans vos réglages) dès qu&apos;un
+                changement significatif est détecté — pas besoin de revenir consulter le dashboard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="alertPriceDropPct">Alerter si le prix baisse de plus de (%)</Label>
+                <Input
+                  id="alertPriceDropPct"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={alertPriceDropPct}
+                  onChange={(e) => setAlertPriceDropPct(e.target.value)}
+                  placeholder="Ex : 10"
+                  className="max-w-32"
+                />
+                <p className="text-xs text-muted-foreground">Laissez vide pour désactiver cette alerte.</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="alertOnStockOut" className="font-normal">
+                  Alerter en cas de rupture de stock
+                </Label>
+                <Switch id="alertOnStockOut" checked={alertOnStockOut} onCheckedChange={setAlertOnStockOut} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="alertOnPromo" className="font-normal">
+                  Alerter en cas de nouvelle promotion
+                </Label>
+                <Switch id="alertOnPromo" checked={alertOnPromo} onCheckedChange={setAlertOnPromo} />
               </div>
             </CardContent>
           </Card>

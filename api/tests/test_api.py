@@ -100,6 +100,63 @@ def test_create_and_list_watcher(client):
     fetched = client.get(f"/watchers/{watcher_id}", headers=auth_headers(token))
     assert fetched.status_code == 200
     assert fetched.json()["name"] == "Competitor product X"
+    # alert_on_stock_out/alert_on_promo default to True, price-drop threshold is opt-in
+    assert fetched.json()["alert_on_stock_out"] is True
+    assert fetched.json()["alert_on_promo"] is True
+    assert fetched.json()["alert_price_drop_pct"] is None
+
+
+def test_create_watcher_with_alert_thresholds(client):
+    token = signup(client)
+    payload = {
+        "watcher_type": "price",
+        "name": "Competitor product Y",
+        "config": {"type": "price", "url": "https://example.com/y", "css_selector": ".price"},
+        "alert_price_drop_pct": 10,
+        "alert_on_stock_out": False,
+        "alert_on_promo": False,
+    }
+    created = client.post("/watchers", json=payload, headers=auth_headers(token))
+    assert created.status_code == 201, created.text
+    assert created.json()["alert_price_drop_pct"] == 10
+    assert created.json()["alert_on_stock_out"] is False
+    assert created.json()["alert_on_promo"] is False
+
+
+def test_update_user_slack_webhook(client):
+    token = signup(client)
+    response = client.patch(
+        "/auth/me", json={"slack_webhook_url": "https://hooks.slack.com/services/x"}, headers=auth_headers(token)
+    )
+    assert response.status_code == 200
+    assert response.json()["slack_webhook_url"] == "https://hooks.slack.com/services/x"
+
+
+def test_clear_user_slack_webhook(client):
+    token = signup(client)
+    client.patch("/auth/me", json={"slack_webhook_url": "https://hooks.slack.com/services/x"}, headers=auth_headers(token))
+
+    response = client.patch("/auth/me", json={"slack_webhook_url": None}, headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.json()["slack_webhook_url"] is None
+
+
+def test_list_watcher_alerts_empty_by_default(client):
+    token = signup(client)
+    created = client.post(
+        "/watchers",
+        json={
+            "watcher_type": "price",
+            "name": "Z",
+            "config": {"type": "price", "url": "https://example.com/z", "css_selector": ".price"},
+        },
+        headers=auth_headers(token),
+    )
+    watcher_id = created.json()["id"]
+
+    response = client.get(f"/watchers/{watcher_id}/alerts", headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_watcher_type_config_mismatch_rejected(client):

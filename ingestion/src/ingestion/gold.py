@@ -7,6 +7,7 @@ import os
 import pandas as pd
 from sqlalchemy import text
 
+from .alerts import evaluate_and_notify
 from .db import get_app_db_engine
 from .storage import (
     ensure_bucket,
@@ -64,6 +65,15 @@ def build_summary_single_series(df: pd.DataFrame, value_col: str = "value", ts_c
     passthrough_cols = ["currency", "in_stock", "stock_text", "original_value", "is_promo", "discount_pct"]
     extra = {col: latest[col] for col in passthrough_cols if col in ordered.columns}
 
+    # Also carry the *previous* observation's stock/promo status so alerts.py can detect a
+    # transition (e.g. in stock -> out of stock) rather than re-alerting every run.
+    previous = ordered.iloc[-2] if len(ordered) > 1 else None
+    if previous is not None:
+        if "in_stock" in ordered.columns:
+            extra["previous_in_stock"] = previous["in_stock"]
+        if "is_promo" in ordered.columns:
+            extra["previous_is_promo"] = previous["is_promo"]
+
     return pd.DataFrame(
         [
             {
@@ -113,7 +123,13 @@ def price_silver_to_gold(watcher_id: int, run_ts: str) -> dict:
     summary_key = f"price/{watcher_id}/{run_ts}_summary.parquet"
     put_bytes(client, GOLD_BUCKET, summary_key, write_parquet_bytes(summary_df))
 
-    return {"timeseries_key": timeseries_key, "summary_key": summary_key, "records_count": len(df)}
+    summary_row = summary_df.iloc[0].to_dict() if not summary_df.empty else None
+    return {
+        "timeseries_key": timeseries_key,
+        "summary_key": summary_key,
+        "records_count": len(df),
+        "summary_row": summary_row,
+    }
 
 
 def transform_silver_to_gold(watcher: dict, silver_key: str, run_ts: str) -> dict:
@@ -135,6 +151,10 @@ def transform_silver_to_gold(watcher: dict, silver_key: str, run_ts: str) -> dic
         summary_key=result["summary_key"],
         records_count=result["records_count"],
     )
+
+    if result.get("summary_row") is not None:
+        evaluate_and_notify(watcher, result["summary_row"])
+
     return result
 
 

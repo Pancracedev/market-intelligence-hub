@@ -50,8 +50,12 @@ def get_due_watchers(now: datetime | None = None) -> list[dict]:
         rows = conn.execute(
             text(
                 """
-                SELECT w.id, w.watcher_type, w.name, w.config, w.schedule, ws.updated_at
+                SELECT w.id, w.watcher_type, w.name, w.config, w.schedule,
+                       w.alert_price_drop_pct, w.alert_on_stock_out, w.alert_on_promo,
+                       u.email, u.slack_webhook_url,
+                       ws.updated_at
                 FROM watchers w
+                JOIN users u ON u.id = w.user_id
                 LEFT JOIN watcher_state ws ON ws.watcher_id = w.id
                 WHERE w.is_active
                 """
@@ -60,7 +64,19 @@ def get_due_watchers(now: datetime | None = None) -> list[dict]:
 
     due = []
     for row in rows:
-        watcher_id, watcher_type, name, config, schedule, last_run_at = row
+        (
+            watcher_id,
+            watcher_type,
+            name,
+            config,
+            schedule,
+            alert_price_drop_pct,
+            alert_on_stock_out,
+            alert_on_promo,
+            user_email,
+            slack_webhook_url,
+            last_run_at,
+        ) = row
         if _is_due(schedule, last_run_at, now):
             due.append(
                 {
@@ -69,6 +85,11 @@ def get_due_watchers(now: datetime | None = None) -> list[dict]:
                     "name": name,
                     "config": config,
                     "schedule": schedule,
+                    "alert_price_drop_pct": alert_price_drop_pct,
+                    "alert_on_stock_out": alert_on_stock_out,
+                    "alert_on_promo": alert_on_promo,
+                    "user_email": user_email,
+                    "slack_webhook_url": slack_webhook_url,
                 }
             )
     return due

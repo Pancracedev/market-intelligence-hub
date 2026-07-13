@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password           TEXT NOT NULL,
     is_active                 BOOLEAN NOT NULL DEFAULT true,
     accepted_scraping_terms_at TIMESTAMPTZ,
+    slack_webhook_url         TEXT,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -15,15 +16,21 @@ CREATE TABLE IF NOT EXISTS users (
 --   trend:    {"keyword": "...", "geo": "FR", "timeframe": "today 12-m"}
 --   eurostat: {"dataset_code": "prc_hicp_manr", "filters": {"geo": "FR"}}
 CREATE TABLE IF NOT EXISTS watchers (
-    id              SERIAL PRIMARY KEY,
-    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    watcher_type    TEXT NOT NULL CHECK (watcher_type IN ('price', 'trend', 'eurostat')),
-    name            TEXT NOT NULL,
-    config          JSONB NOT NULL,
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    schedule        TEXT NOT NULL DEFAULT '@daily',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                     SERIAL PRIMARY KEY,
+    user_id                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    watcher_type           TEXT NOT NULL CHECK (watcher_type IN ('price', 'trend', 'eurostat')),
+    name                   TEXT NOT NULL,
+    config                 JSONB NOT NULL,
+    is_active              BOOLEAN NOT NULL DEFAULT true,
+    schedule               TEXT NOT NULL DEFAULT '@daily',
+    -- Alert rules, evaluated after each gold run (see ingestion/src/ingestion/alerts.py).
+    -- alert_price_drop_pct: notify when the price drops by at least this many percent
+    -- since the previous observation (NULL = no price-drop alert for this watcher).
+    alert_price_drop_pct   DOUBLE PRECISION,
+    alert_on_stock_out     BOOLEAN NOT NULL DEFAULT true,
+    alert_on_promo         BOOLEAN NOT NULL DEFAULT true,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_watchers_user_id ON watchers (user_id);
@@ -59,3 +66,17 @@ CREATE TABLE IF NOT EXISTS domain_rate_limits (
     domain          TEXT PRIMARY KEY,
     last_request_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Audit trail of alerts actually sent (price drop / stock out / promo), so users can see
+-- what was notified and when, and so the pipeline never needs to guess whether an alert
+-- for a given run was already sent.
+CREATE TABLE IF NOT EXISTS notifications_log (
+    id           SERIAL PRIMARY KEY,
+    watcher_id   INTEGER NOT NULL REFERENCES watchers(id) ON DELETE CASCADE,
+    alert_type   TEXT NOT NULL CHECK (alert_type IN ('price_drop', 'stock_out', 'promo')),
+    channel      TEXT NOT NULL CHECK (channel IN ('email', 'slack')),
+    message      TEXT NOT NULL,
+    sent_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_log_watcher_id ON notifications_log (watcher_id);

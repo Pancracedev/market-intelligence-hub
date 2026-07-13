@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..auth import create_access_token, get_current_user, hash_password, verify_password
 from ..db import get_db
 from ..models import User
-from ..schemas import SignupRequest, TokenResponse, UserResponse
+from ..schemas import SignupRequest, TokenResponse, UserResponse, UserSettingsUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,4 +48,20 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    # Use model_fields_set (not "is not None") so an explicit {"slack_webhook_url": null}
+    # clears the field - a plain None default can't otherwise distinguish "omitted" from
+    # "explicitly cleared".
+    if "slack_webhook_url" in payload.model_fields_set:
+        current_user.slack_webhook_url = payload.slack_webhook_url or None
+    db.commit()
+    db.refresh(current_user)
     return current_user

@@ -3,6 +3,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -21,6 +22,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     accepted_scraping_terms_at = Column(DateTime(timezone=True))
+    slack_webhook_url = Column(String)
     created_at = Column(DateTime(timezone=True))
 
     watchers = relationship("Watcher", back_populates="user", cascade="all, delete-orphan")
@@ -36,6 +38,9 @@ class Watcher(Base):
     config = Column(JSON, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     schedule = Column(String, nullable=False, default="@daily")
+    alert_price_drop_pct = Column(Float)
+    alert_on_stock_out = Column(Boolean, nullable=False, default=True)
+    alert_on_promo = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True))
     updated_at = Column(DateTime(timezone=True))
 
@@ -70,3 +75,14 @@ class Run(Base):
     created_at = Column(DateTime(timezone=True))
 
     watcher = relationship("Watcher", back_populates="runs")
+
+
+class NotificationLog(Base):
+    __tablename__ = "notifications_log"
+
+    id = Column(Integer, primary_key=True)
+    watcher_id = Column(Integer, ForeignKey("watchers.id", ondelete="CASCADE"), nullable=False)
+    alert_type = Column(String, nullable=False)
+    channel = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    sent_at = Column(DateTime(timezone=True))

@@ -20,6 +20,8 @@ Un utilisateur crée un compte, puis ajoute un **watcher** : ce qu'il veut suivr
 
 Chaque watcher a sa propre fréquence (`schedule`) et ses données sont isolées par compte.
 
+**Alertes** : plutôt que de devoir revenir consulter le dashboard, chaque produit `price` peut déclencher une notification (email — toujours envoyée à l'adresse du compte si SMTP est configuré — et/ou Slack via un webhook réglable dans `/settings`) dès qu'une baisse de prix dépasse un seuil choisi, qu'une rupture de stock est détectée, ou qu'une nouvelle promotion apparaît. L'historique des alertes envoyées est visible sur la page de chaque produit.
+
 ## Stack technique
 
 | Composant | Technologie |
@@ -125,8 +127,9 @@ make lint    # ruff sur les packages Python
 
 ## Roadmap
 
+- [x] Alertes Slack/Email sur baisse de prix, rupture de stock, promotion
+- [ ] Comparaison multi-concurrents par produit + suggestion de prix optimal
 - [ ] Watcher `trend` (Google Trends via pytrends)
-- [ ] Scoring / alertes Slack-Email sur variation significative
 - [ ] Row-Level Security Postgres, refresh tokens, cookies httpOnly
 - [ ] Infrastructure as Code (Terraform) pour déploiement cloud
 - [ ] Monitoring Prometheus + Grafana

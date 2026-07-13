@@ -53,6 +53,7 @@ export interface TokenResponse {
 export interface CurrentUser {
   id: number;
   email: string;
+  slack_webhook_url: string | null;
   created_at: string;
 }
 
@@ -72,6 +73,9 @@ export interface Product {
   config: ProductConfig | Record<string, unknown>;
   is_active: boolean;
   schedule: string;
+  alert_price_drop_pct: number | null;
+  alert_on_stock_out: boolean;
+  alert_on_promo: boolean;
   created_at: string;
   updated_at: string;
   latest_gold_timeseries_key: string | null;
@@ -110,6 +114,15 @@ export interface Run {
   created_at: string;
 }
 
+export interface AlertEvent {
+  id: number;
+  watcher_id: number;
+  alert_type: "price_drop" | "stock_out" | "promo";
+  channel: "email" | "slack";
+  message: string;
+  sent_at: string;
+}
+
 export interface CreateProductInput {
   name: string;
   url: string;
@@ -118,6 +131,9 @@ export interface CreateProductInput {
   schedule: string;
   stockSelector?: string;
   promoSelector?: string;
+  alertPriceDropPct?: number;
+  alertOnStockOut: boolean;
+  alertOnPromo: boolean;
 }
 
 export const api = {
@@ -134,6 +150,12 @@ export const api = {
 
   me: () => request<CurrentUser>("/auth/me"),
 
+  updateSettings: (slackWebhookUrl: string) =>
+    request<CurrentUser>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify({ slack_webhook_url: slackWebhookUrl || null }),
+    }),
+
   listProducts: () => request<Product[]>("/watchers"),
 
   getProduct: (id: number) => request<Product>(`/watchers/${id}`),
@@ -145,6 +167,9 @@ export const api = {
         watcher_type: "price",
         name: input.name,
         schedule: input.schedule,
+        alert_price_drop_pct: input.alertPriceDropPct || null,
+        alert_on_stock_out: input.alertOnStockOut,
+        alert_on_promo: input.alertOnPromo,
         config: {
           type: "price",
           url: input.url,
@@ -164,4 +189,6 @@ export const api = {
 
   listRuns: (productId?: number) =>
     request<Run[]>(`/runs${productId ? `?watcher_id=${productId}` : ""}`),
+
+  listAlerts: (productId: number) => request<AlertEvent[]>(`/watchers/${productId}/alerts`),
 };
