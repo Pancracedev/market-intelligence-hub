@@ -162,6 +162,7 @@ services:
       MINIO_BUCKET_GOLD: "${MINIO_BUCKET_GOLD:-gold}"
       JWT_SECRET_KEY: "${JWT_SECRET_KEY:-change-me-in-production}"
       SEED_DEMO_USER: "${SEED_DEMO_USER:-true}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000}"
       SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_USER: "${SMTP_USER:-}"

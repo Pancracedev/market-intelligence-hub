@@ -41,6 +41,20 @@ def auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_cors_headers_present_for_allowed_frontend_origin(client):
+    # Regression test: without CORSMiddleware, the browser (not curl) silently blocks every
+    # cross-origin request from the frontend (localhost:3000) to the API (localhost:8000),
+    # which surfaced to users as "impossible de contacter le serveur" on login.
+    response = client.options(
+        "/auth/login",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
