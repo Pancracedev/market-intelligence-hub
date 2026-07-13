@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+.env
+*.log
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+
+# Data (local dev volumes, never commit data)
+data/
+*.parquet
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

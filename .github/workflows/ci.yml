@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff>=0.4
+      - name: Lint ingestion package
+        run: ruff check ingestion/src ingestion/tests
+      - name: Lint API
+        run: ruff check api/app api/tests
+
+  test-ingestion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ingestion package
+        run: pip install -e "ingestion[dev]"
+      - name: Run tests
+        run: pytest ingestion/tests -v
+
+  test-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install API dependencies
+        run: pip install -r api/requirements.txt
+      - name: Run tests
+        working-directory: api
+        run: PYTHONPATH=. pytest tests -v
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, test-ingestion, test-api]
+    strategy:
+      matrix:
+        include:
+          - name: airflow
+            context: .
+            dockerfile: airflow/Dockerfile
+          - name: api
+            context: ./api
+            dockerfile: api/Dockerfile
+          - name: dashboard
+            context: ./dashboard
+            dockerfile: dashboard/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          tags: market-intelligence-hub-${{ matrix.name }}:ci
