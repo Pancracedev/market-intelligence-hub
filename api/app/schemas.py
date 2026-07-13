@@ -98,6 +98,14 @@ class WatcherResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DigestResponse(BaseModel):
+    id: int
+    content: str
+    generated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class NotificationResponse(BaseModel):
     id: int
     watcher_id: int

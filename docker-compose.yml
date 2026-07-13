@@ -25,6 +25,8 @@ x-airflow-common: &airflow-common
     SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
     SMTP_FROM: "${SMTP_FROM:-}"
     SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    ANTHROPIC_DIGEST_MODEL: "${ANTHROPIC_DIGEST_MODEL:-claude-haiku-4-5-20251001}"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow_logs:/opt/airflow/logs
@@ -160,6 +162,14 @@ services:
       MINIO_BUCKET_GOLD: "${MINIO_BUCKET_GOLD:-gold}"
       JWT_SECRET_KEY: "${JWT_SECRET_KEY:-change-me-in-production}"
       SEED_DEMO_USER: "${SEED_DEMO_USER:-true}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      ANTHROPIC_DIGEST_MODEL: "${ANTHROPIC_DIGEST_MODEL:-claude-haiku-4-5-20251001}"
     ports:
       - "8000:8000"
     depends_on:

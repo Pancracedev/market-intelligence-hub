@@ -110,7 +110,17 @@ Deux canaux, `ingestion/src/ingestion/notifications.py` :
 
 Chaque notification effectivement envoyée est journalisée dans `notifications_log` (exposée via `GET /watchers/{id}/alerts`) pour que l'utilisateur voie ce qui a été envoyé, sans avoir à déduire un historique depuis les runs.
 
-## 12. Limites connues et évolutions prévues
+## 12. Résumé hebdomadaire par IA
+
+`ingestion/src/ingestion/digest.py` est la couche d'interprétation au-dessus du pipeline : plutôt que de lister des deltas bruts, elle transforme l'activité de la semaine en une synthèse en langage naturel.
+
+1. `get_users_with_active_watchers()` liste les utilisateurs éligibles (≥1 watcher actif) — audience du DAG `airflow/dags/weekly_digest.py` (`@weekly`, dynamic task mapping, un digest par utilisateur).
+2. `collect_digest_data(user_id, since)` rassemble, pour chaque watcher : le dernier résumé Gold (prix, stock, promo), le nombre de vérifications sur la fenêtre, et les alertes envoyées (`notifications_log`) sur la même fenêtre.
+3. `render_prompt(...)` construit un prompt structuré ; `_call_llm(...)` appelle Claude (modèle configurable via `ANTHROPIC_DIGEST_MODEL`, par défaut `claude-haiku-4-5` pour un coût minimal) pour produire une synthèse de 3 à 5 phrases, orientée décision plutôt que description.
+4. Si `ANTHROPIC_API_KEY` n'est pas configurée, `_fallback_digest(...)` produit un résumé factuel simple (sans IA) — le pipeline ne casse jamais par absence de clé, même comportement que l'e-mail sans SMTP.
+5. Le résultat est envoyé par email et journalisé dans `digest_log`, exposé via `GET /digests` (historique) et `POST /digests/generate` (génération à la demande, utile pour tester sans attendre la semaine).
+
+## 13. Limites connues et évolutions prévues
 
 - Watcher `trend` (Google Trends) : schéma prêt, pipeline non câblé.
 - Isolation par API seulement (pas de Row-Level Security Postgres).

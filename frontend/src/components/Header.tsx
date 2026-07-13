@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LineChart, LogOut, Settings } from "lucide-react";
+import { LineChart, LogOut, Settings, Sparkles } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { clearToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,13 @@ export default function Header({ email }: { email?: string }) {
               {email}
             </span>
           )}
+          <Link
+            href="/digests"
+            aria-label="Résumés hebdomadaires"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
+          >
+            <Sparkles className="h-4 w-4" />
+          </Link>
           <Link
             href="/settings"
             aria-label="Réglages"

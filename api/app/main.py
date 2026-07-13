@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .db import SessionLocal
-from .routers import auth, watchers
+from .routers import auth, digests, watchers
 from .seed import ensure_demo_user
 
 
@@ -27,6 +27,7 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(watchers.router)
 app.include_router(watchers.runs_router)
+app.include_router(digests.router)
 
 
 @app.get("/health")

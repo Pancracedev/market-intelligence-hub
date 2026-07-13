@@ -86,3 +86,12 @@ class NotificationLog(Base):
     channel = Column(String, nullable=False)
     message = Column(Text, nullable=False)
     sent_at = Column(DateTime(timezone=True))
+
+
+class DigestLog(Base):
+    __tablename__ = "digest_log"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    generated_at = Column(DateTime(timezone=True))

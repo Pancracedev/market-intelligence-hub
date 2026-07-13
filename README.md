@@ -22,6 +22,8 @@ Chaque watcher a sa propre fréquence (`schedule`) et ses données sont isolées
 
 **Alertes** : plutôt que de devoir revenir consulter le dashboard, chaque produit `price` peut déclencher une notification (email — toujours envoyée à l'adresse du compte si SMTP est configuré — et/ou Slack via un webhook réglable dans `/settings`) dès qu'une baisse de prix dépasse un seuil choisi, qu'une rupture de stock est détectée, ou qu'une nouvelle promotion apparaît. L'historique des alertes envoyées est visible sur la page de chaque produit.
 
+**Résumé hebdomadaire par IA** (`/digests`) : chaque semaine, une IA (Claude) lit l'activité de tous vos produits suivis — prix, ruptures, promos, alertes envoyées — et en tire une interprétation en 3-5 phrases plutôt qu'une simple liste de chiffres ("3 concurrents ont baissé leurs prix ce mois-ci, vous êtes désormais le plus cher de 8%"). Génération à la demande possible, et repli automatique sur un résumé factuel sans IA si `ANTHROPIC_API_KEY` n'est pas configurée.
+
 ## Stack technique
 
 | Composant | Technologie |
@@ -128,6 +130,7 @@ make lint    # ruff sur les packages Python
 ## Roadmap
 
 - [x] Alertes Slack/Email sur baisse de prix, rupture de stock, promotion
+- [x] Résumé hebdomadaire interprété par IA (Claude)
 - [ ] Comparaison multi-concurrents par produit + suggestion de prix optimal
 - [ ] Watcher `trend` (Google Trends via pytrends)
 - [ ] Row-Level Security Postgres, refresh tokens, cookies httpOnly

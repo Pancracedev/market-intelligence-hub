@@ -159,6 +159,39 @@ def test_list_watcher_alerts_empty_by_default(client):
     assert response.json() == []
 
 
+def test_list_digests_empty_by_default(client):
+    token = signup(client)
+    response = client.get("/digests", headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_generate_digest_now_without_watchers_rejected(client, monkeypatch):
+    import ingestion.digest
+
+    monkeypatch.setattr(ingestion.digest, "generate_weekly_digest", lambda user_id, user_email: None)
+
+    token = signup(client)
+    response = client.post("/digests/generate", headers=auth_headers(token))
+    assert response.status_code == 400
+
+
+def test_generate_digest_now_returns_created_digest(client, monkeypatch):
+    import ingestion.digest
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(
+        ingestion.digest,
+        "generate_weekly_digest",
+        lambda user_id, user_email: {"id": 1, "content": "Résumé test.", "generated_at": datetime.now(timezone.utc)},
+    )
+
+    token = signup(client)
+    response = client.post("/digests/generate", headers=auth_headers(token))
+    assert response.status_code == 201, response.text
+    assert response.json()["content"] == "Résumé test."
+
+
 def test_watcher_type_config_mismatch_rejected(client):
     token = signup(client)
     payload = {

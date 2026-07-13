@@ -123,6 +123,12 @@ export interface AlertEvent {
   sent_at: string;
 }
 
+export interface Digest {
+  id: number;
+  content: string;
+  generated_at: string;
+}
+
 export interface CreateProductInput {
   name: string;
   url: string;
@@ -191,4 +197,8 @@ export const api = {
     request<Run[]>(`/runs${productId ? `?watcher_id=${productId}` : ""}`),
 
   listAlerts: (productId: number) => request<AlertEvent[]>(`/watchers/${productId}/alerts`),
+
+  listDigests: () => request<Digest[]>("/digests"),
+
+  generateDigestNow: () => request<Digest>("/digests/generate", { method: "POST" }),
 };

@@ -12,6 +12,7 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "beautifulsoup4>=4.12",
     "croniter>=2.0",
+    "anthropic>=0.40",
 ]
 
 [dependency-groups]

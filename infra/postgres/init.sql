@@ -80,3 +80,15 @@ CREATE TABLE IF NOT EXISTS notifications_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_log_watcher_id ON notifications_log (watcher_id);
+
+-- Weekly AI-generated digests: a narrative interpretation of the week's runs/alerts across
+-- all of a user's watchers (see ingestion/src/ingestion/digest.py), emailed and kept here
+-- so the user can revisit past summaries in the frontend.
+CREATE TABLE IF NOT EXISTS digest_log (
+    id            SERIAL PRIMARY KEY,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content       TEXT NOT NULL,
+    generated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_digest_log_user_id ON digest_log (user_id);
