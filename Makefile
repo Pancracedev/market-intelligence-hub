@@ -1,4 +1,4 @@
-.PHONY: up down logs ps build test test-ingestion test-api lint dag-trigger clean
+.PHONY: up down logs ps build sync test test-ingestion test-api lint dag-trigger clean
 
 up:
 	docker compose up -d --build
@@ -18,17 +18,22 @@ ps:
 build:
 	docker compose build
 
+sync:
+	cd ingestion && uv sync
+	cd api && uv sync
+	cd dashboard && uv sync
+
 test-ingestion:
-	cd ingestion && pip install -q -e ".[dev]" && pytest -v
+	cd ingestion && uv sync && uv run pytest tests -v
 
 test-api:
-	cd api && pip install -q -r requirements.txt && pytest -v
+	cd api && uv sync && PYTHONPATH=. uv run pytest tests -v
 
 test: test-ingestion test-api
 
 lint:
-	cd ingestion && ruff check src tests
-	cd api && ruff check app tests
+	cd ingestion && uv run ruff check src tests
+	cd api && uv run ruff check app tests
 
 dag-trigger:
 	docker compose exec airflow-webserver airflow dags trigger market_intelligence_pipeline

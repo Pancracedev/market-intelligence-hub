@@ -43,6 +43,7 @@ Chaque étape est une tâche Airflow indépendante (`@task`), avec passage de co
 | **FastAPI** plutôt que Flask | Typage natif, documentation OpenAPI générée automatiquement (`/docs`), meilleure adéquation avec un stack Python moderne et testable (`TestClient`). |
 | **Streamlit** plutôt que Superset | Mise en place en quelques dizaines de lignes, hébergement gratuit possible (Streamlit Cloud) pour une démo publique — pertinent pour la validation Niveau 1 avant d'envisager Superset si le besoin BI d'entreprise se confirme. |
 | **DuckDB** (usage prévu, pas de service dédié) | Interrogation ad hoc des fichiers Gold sans infrastructure supplémentaire ; introduit uniquement côté consommation (API/dashboard) si des requêtes analytiques plus complexes sont nécessaires. |
+| **uv** pour la gestion des dépendances Python | Résolution et installation nettement plus rapides que pip (utile en CI et en build Docker), lockfiles reproductibles (`uv.lock`) par package (`ingestion/`, `api/`, `dashboard/`), et environnements virtuels isolés par service. |
 
 ## 5. Modèle de données (app-db)
 

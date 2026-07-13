@@ -64,6 +64,17 @@ cp .env.example .env
 make up
 ```
 
+### Développement local (sans Docker)
+
+Chaque package Python (`ingestion/`, `api/`, `dashboard/`) est géré avec [`uv`](https://docs.astral.sh/uv/) et son propre `.venv` :
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # si uv n'est pas déjà installé
+make sync   # crée les .venv et installe les dépendances (via uv.lock) pour les 3 packages
+make test   # lance les tests (ingestion + api) avec uv run
+make lint   # ruff sur ingestion + api
+```
+
 Accès aux services une fois démarrés :
 
 | Service | URL | Identifiants |

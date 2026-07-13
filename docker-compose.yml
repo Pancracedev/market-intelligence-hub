@@ -87,7 +87,7 @@ services:
       - mih-network
 
   minio-init:
-    image: minio/mc:RELEASE.2024-07-16T23-46-41Z
+    image: minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy
