@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..db import get_db
-from ..models import NotificationLog, Run, User, Watcher
+from ..models import ComparisonGroup, NotificationLog, Run, User, Watcher
 from ..schemas import (
     DetectProductRequest,
     DetectProductResponse,
@@ -53,6 +53,7 @@ def _to_response(watcher: Watcher) -> WatcherResponse:
         alert_price_drop_pct=watcher.alert_price_drop_pct,
         alert_on_stock_out=watcher.alert_on_stock_out,
         alert_on_promo=watcher.alert_on_promo,
+        comparison_group_id=watcher.comparison_group_id,
         created_at=watcher.created_at,
         updated_at=watcher.updated_at,
         latest_gold_timeseries_key=state.latest_gold_timeseries_key if state else None,
@@ -69,6 +70,16 @@ def _get_owned_watcher(watcher_id: int, current_user: User, db: Session) -> Watc
     return watcher
 
 
+def _check_group_ownership(group_id: int | None, current_user: User, db: Session) -> None:
+    if group_id is None:
+        return
+    group = db.execute(
+        select(ComparisonGroup).where(ComparisonGroup.id == group_id, ComparisonGroup.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comparison group not found")
+
+
 @router.get("", response_model=list[WatcherResponse])
 def list_watchers(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -83,6 +94,7 @@ def create_watcher(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WatcherResponse:
+    _check_group_ownership(payload.comparison_group_id, current_user, db)
     now = datetime.now(timezone.utc)
     watcher = Watcher(
         user_id=current_user.id,
@@ -93,6 +105,7 @@ def create_watcher(
         alert_price_drop_pct=payload.alert_price_drop_pct,
         alert_on_stock_out=payload.alert_on_stock_out,
         alert_on_promo=payload.alert_on_promo,
+        comparison_group_id=payload.comparison_group_id,
         created_at=now,
         updated_at=now,
     )
@@ -133,6 +146,9 @@ def update_watcher(
         watcher.alert_on_stock_out = payload.alert_on_stock_out
     if payload.alert_on_promo is not None:
         watcher.alert_on_promo = payload.alert_on_promo
+    if "comparison_group_id" in payload.model_fields_set:
+        _check_group_ownership(payload.comparison_group_id, current_user, db)
+        watcher.comparison_group_id = payload.comparison_group_id
     watcher.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(watcher)

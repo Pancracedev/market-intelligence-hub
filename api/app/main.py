@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import SessionLocal
-from .routers import auth, digests, watchers
+from .routers import auth, comparison_groups, digests, watchers
 from .seed import ensure_demo_user
 
 
@@ -39,6 +39,7 @@ app.include_router(auth.router)
 app.include_router(watchers.router)
 app.include_router(watchers.runs_router)
 app.include_router(digests.router)
+app.include_router(comparison_groups.router)
 
 
 @app.get("/health")

@@ -3,13 +3,23 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, PackageCheck, PackageX, Tag, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, PackageCheck, PackageX, Scale, Tag, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, ApiError, type AlertEvent, type Product, type ProductSummary, type PricePoint, type Run } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  api,
+  ApiError,
+  type AlertEvent,
+  type ComparisonGroup,
+  type Product,
+  type ProductSummary,
+  type PricePoint,
+  type Run,
+} from "@/lib/api";
 import Header from "@/components/Header";
 import PriceChart from "@/components/PriceChart";
 import RunHistoryTable from "@/components/RunHistoryTable";
@@ -25,6 +35,7 @@ export default function ProductDetailPage() {
   const [summary, setSummary] = useState<ProductSummary | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
+  const [groups, setGroups] = useState<ComparisonGroup[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -34,7 +45,19 @@ export default function ProductDetailPage() {
     api.getProductSummary(productId).then((rows) => setSummary(rows[0] ?? null)).catch(() => {});
     api.listRuns(productId).then(setRuns).catch(() => {});
     api.listAlerts(productId).then(setAlerts).catch(() => {});
+    api.listComparisonGroups().then(setGroups).catch(() => {});
   }, [productId]);
+
+  async function handleGroupChange(value: string | null) {
+    const groupId = !value || value === "none" ? null : Number(value);
+    try {
+      const updated = await api.assignProductToGroup(productId, groupId);
+      setProduct(updated);
+      toast.success(groupId ? "Produit assigné à la comparaison" : "Produit retiré de la comparaison");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Assignation impossible");
+    }
+  }
 
   async function handleDelete() {
     if (!confirm("Supprimer définitivement ce produit de votre veille ?")) return;
@@ -157,6 +180,39 @@ export default function ProductDetailPage() {
               </CardHeader>
               <CardContent>
                 <PriceChart data={history} />
+              </CardContent>
+            </Card>
+
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Scale className="h-4 w-4" />
+                  Comparaison
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Regroupez ce produit avec ses équivalents chez d&apos;autres concurrents pour les
+                  comparer côte à côte.
+                </p>
+                <Select value={product.comparison_group_id?.toString() ?? "none"} onValueChange={handleGroupChange}>
+                  <SelectTrigger className="w-full sm:w-64">
+                    <SelectValue placeholder="Aucune comparaison" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucune comparaison</SelectItem>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {groups.length === 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Aucune comparaison créée — <Link href="/comparisons" className="underline">créez-en une</Link>.
+                  </p>
+                )}
               </CardContent>
             </Card>
 

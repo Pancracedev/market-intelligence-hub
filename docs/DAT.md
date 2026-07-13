@@ -129,7 +129,15 @@ Demander un sélecteur CSS à un utilisateur non technique est le principal poin
 
 `PriceConfig.mode` vaut `"auto"` par défaut (juste une URL, pas de sélecteur) ou `"manual"` (comportement v1, sélecteur CSS explicite requis) pour les sites sans aucune donnée structurée. Le frontend propose un bouton "Détecter" (`POST /watchers/detect`) qui affiche un aperçu avant la création du watcher, avec un panneau "Options avancées" repliable en cas d'échec de la détection. La détection de promotion reste réservée au mode manuel (`promo_selector`) faute de standard schema.org fiable pour le prix barré — en mode auto, une baisse de prix est déjà couverte par l'alerte `alert_price_drop_pct` existante.
 
-## 14. Limites connues et évolutions prévues
+## 14. Comparaison multi-concurrents
+
+`comparison_groups` regroupe plusieurs watchers `price` qui suivent le même article chez des concurrents différents. `watchers.comparison_group_id` (nullable, `ON DELETE SET NULL`) rattache un watcher à un groupe sans dépendance forte — supprimer un groupe détache ses watchers plutôt que de les supprimer.
+
+- `POST/GET/PATCH/DELETE /comparison-groups` : CRUD scopé à l'utilisateur (isolation vérifiée à chaque accès, y compris pour empêcher d'assigner un watcher à un groupe appartenant à un autre utilisateur).
+- Assignation via `PATCH /watchers/{id}` (`comparison_group_id`), exposée sur la page de détail produit — pas de sélection à la création pour ne pas surcharger le formulaire déjà simplifié.
+- Le frontend (`/comparisons/{id}`) recompose la comparaison côté client à partir des endpoints existants (`GET /watchers/{id}/summary` et `/timeseries` par membre, même pattern N+1 que le dashboard) plutôt que d'ajouter un endpoint d'agrégation dédié — cohérent avec l'architecture existante et suffisant à l'échelle d'un groupe de quelques concurrents. Le graphique superpose les séries par timestamp (`connectNulls` sur des séries non alignées), et le classement trie par dernier prix connu.
+
+## 15. Limites connues et évolutions prévues
 
 - Watcher `trend` (Google Trends) : schéma prêt, pipeline non câblé.
 - Isolation par API seulement (pas de Row-Level Security Postgres).

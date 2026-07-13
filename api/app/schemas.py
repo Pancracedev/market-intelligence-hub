@@ -69,6 +69,7 @@ class WatcherCreate(BaseModel):
     alert_price_drop_pct: float | None = Field(default=None, gt=0, le=100)
     alert_on_stock_out: bool = True
     alert_on_promo: bool = True
+    comparison_group_id: int | None = None
 
     @model_validator(mode="after")
     def check_type_matches_config(self) -> "WatcherCreate":
@@ -85,6 +86,7 @@ class WatcherUpdate(BaseModel):
     alert_price_drop_pct: float | None = Field(default=None, gt=0, le=100)
     alert_on_stock_out: bool | None = None
     alert_on_promo: bool | None = None
+    comparison_group_id: int | None = None
 
 
 class WatcherResponse(BaseModel):
@@ -97,10 +99,28 @@ class WatcherResponse(BaseModel):
     alert_price_drop_pct: float | None = None
     alert_on_stock_out: bool
     alert_on_promo: bool
+    comparison_group_id: int | None = None
     created_at: datetime
     updated_at: datetime
     latest_gold_timeseries_key: str | None = None
     latest_gold_summary_key: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ComparisonGroupCreate(BaseModel):
+    name: str
+
+
+class ComparisonGroupUpdate(BaseModel):
+    name: str
+
+
+class ComparisonGroupResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    watchers: list[WatcherResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

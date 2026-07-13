@@ -24,6 +24,8 @@ Chaque watcher a sa propre fréquence (`schedule`) et ses données sont isolées
 
 **Résumé hebdomadaire par IA** (`/digests`) : chaque semaine, une IA (Groq gratuit, ou Claude si configuré) lit l'activité de tous vos produits suivis — prix, ruptures, promos, alertes envoyées — et en tire une interprétation en 3-5 phrases plutôt qu'une simple liste de chiffres ("3 concurrents ont baissé leurs prix ce mois-ci, vous êtes désormais le plus cher de 8%"). Génération à la demande possible, et repli automatique sur un résumé factuel sans IA si aucune clé n'est configurée.
 
+**Comparaison multi-concurrents** (`/comparisons`) : regroupez plusieurs produits `price` qui suivent le même article chez des concurrents différents (depuis la page de détail d'un produit) pour voir un graphique superposé de l'évolution des prix et un classement automatique du moins cher au plus cher.
+
 ## Stack technique
 
 | Composant | Technologie |
@@ -132,7 +134,8 @@ make lint    # ruff sur les packages Python
 - [x] Alertes Slack/Email sur baisse de prix, rupture de stock, promotion
 - [x] Résumé hebdomadaire interprété par IA (Groq gratuit / Claude)
 - [x] Détection automatique du prix/stock (sans sélecteur CSS) via données structurées
-- [ ] Comparaison multi-concurrents par produit + suggestion de prix optimal
+- [x] Comparaison multi-concurrents par produit (`/comparisons`)
+- [ ] Suggestion de prix optimal basée sur les écarts observés
 - [ ] Watcher `trend` (Google Trends via pytrends)
 - [ ] Row-Level Security Postgres, refresh tokens, cookies httpOnly
 - [ ] Infrastructure as Code (Terraform) pour déploiement cloud

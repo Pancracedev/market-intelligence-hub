@@ -28,6 +28,17 @@ class User(Base):
     watchers = relationship("Watcher", back_populates="user", cascade="all, delete-orphan")
 
 
+class ComparisonGroup(Base):
+    __tablename__ = "comparison_groups"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True))
+
+    watchers = relationship("Watcher", back_populates="comparison_group")
+
+
 class Watcher(Base):
     __tablename__ = "watchers"
 
@@ -41,6 +52,7 @@ class Watcher(Base):
     alert_price_drop_pct = Column(Float)
     alert_on_stock_out = Column(Boolean, nullable=False, default=True)
     alert_on_promo = Column(Boolean, nullable=False, default=True)
+    comparison_group_id = Column(Integer, ForeignKey("comparison_groups.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True))
     updated_at = Column(DateTime(timezone=True))
 
@@ -49,6 +61,7 @@ class Watcher(Base):
         "WatcherState", back_populates="watcher", uselist=False, cascade="all, delete-orphan"
     )
     runs = relationship("Run", back_populates="watcher", cascade="all, delete-orphan")
+    comparison_group = relationship("ComparisonGroup", back_populates="watchers")
 
 
 class WatcherState(Base):

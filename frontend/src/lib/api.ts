@@ -84,10 +84,18 @@ export interface Product {
   alert_price_drop_pct: number | null;
   alert_on_stock_out: boolean;
   alert_on_promo: boolean;
+  comparison_group_id: number | null;
   created_at: string;
   updated_at: string;
   latest_gold_timeseries_key: string | null;
   latest_gold_summary_key: string | null;
+}
+
+export interface ComparisonGroup {
+  id: number;
+  name: string;
+  created_at: string;
+  watchers: Product[];
 }
 
 export interface ProductSummary {
@@ -149,6 +157,7 @@ export interface CreateProductInput {
   alertPriceDropPct?: number;
   alertOnStockOut: boolean;
   alertOnPromo: boolean;
+  comparisonGroupId?: number | null;
 }
 
 export const api = {
@@ -185,6 +194,7 @@ export const api = {
         alert_price_drop_pct: input.alertPriceDropPct || null,
         alert_on_stock_out: input.alertOnStockOut,
         alert_on_promo: input.alertOnPromo,
+        comparison_group_id: input.comparisonGroupId ?? null,
         config: {
           type: "price",
           url: input.url,
@@ -213,4 +223,19 @@ export const api = {
   listDigests: () => request<Digest[]>("/digests"),
 
   generateDigestNow: () => request<Digest>("/digests/generate", { method: "POST" }),
+
+  listComparisonGroups: () => request<ComparisonGroup[]>("/comparison-groups"),
+
+  getComparisonGroup: (id: number) => request<ComparisonGroup>(`/comparison-groups/${id}`),
+
+  createComparisonGroup: (name: string) =>
+    request<ComparisonGroup>("/comparison-groups", { method: "POST", body: JSON.stringify({ name }) }),
+
+  deleteComparisonGroup: (id: number) => request<void>(`/comparison-groups/${id}`, { method: "DELETE" }),
+
+  assignProductToGroup: (productId: number, comparisonGroupId: number | null) =>
+    request<Product>(`/watchers/${productId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ comparison_group_id: comparisonGroupId }),
+    }),
 };

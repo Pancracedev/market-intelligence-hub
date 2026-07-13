@@ -10,6 +10,18 @@ CREATE TABLE IF NOT EXISTS users (
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Groups several `price` watchers (typically the same product tracked at different
+-- competitors) so the frontend can render a side-by-side comparison instead of isolated
+-- charts. Declared before `watchers` since the latter holds a nullable FK to it.
+CREATE TABLE IF NOT EXISTS comparison_groups (
+    id          SERIAL PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_comparison_groups_user_id ON comparison_groups (user_id);
+
 -- Generic watcher: what a user wants tracked. `config` holds type-specific fields
 -- (validated at the API layer via Pydantic, not DB constraints):
 --   price:    {"url": "...", "css_selector": "...", "currency": "EUR"}
@@ -29,9 +41,13 @@ CREATE TABLE IF NOT EXISTS watchers (
     alert_price_drop_pct   DOUBLE PRECISION,
     alert_on_stock_out     BOOLEAN NOT NULL DEFAULT true,
     alert_on_promo         BOOLEAN NOT NULL DEFAULT true,
+    -- NULL = not part of a comparison group (the common case for a one-off watcher).
+    comparison_group_id    INTEGER REFERENCES comparison_groups(id) ON DELETE SET NULL,
     created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_watchers_comparison_group_id ON watchers (comparison_group_id);
 
 CREATE INDEX IF NOT EXISTS idx_watchers_user_id ON watchers (user_id);
 CREATE INDEX IF NOT EXISTS idx_watchers_active ON watchers (is_active) WHERE is_active;

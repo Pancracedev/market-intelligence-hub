@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -16,6 +16,13 @@ def client():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _):
+        # SQLite ignores ON DELETE SET NULL/CASCADE unless this pragma is set - needed for
+        # e.g. comparison_groups deletion to correctly detach (not orphan) its watchers.
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
     Base.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -315,3 +322,83 @@ def test_list_runs_empty_by_default(client):
     response = client.get("/runs", headers=auth_headers(token))
     assert response.status_code == 200
     assert response.json() == []
+
+
+def _create_price_watcher(client, token, name="Produit"):
+    return client.post(
+        "/watchers",
+        json={
+            "watcher_type": "price",
+            "name": name,
+            "config": {"type": "price", "url": f"https://example.com/{name}"},
+        },
+        headers=auth_headers(token),
+    ).json()
+
+
+def test_create_comparison_group_and_assign_watcher(client):
+    token = signup(client)
+    group = client.post("/comparison-groups", json={"name": "Casque XZ200"}, headers=auth_headers(token))
+    assert group.status_code == 201, group.text
+    group_id = group.json()["id"]
+
+    watcher = _create_price_watcher(client, token, "Concurrent A")
+    updated = client.patch(
+        f"/watchers/{watcher['id']}", json={"comparison_group_id": group_id}, headers=auth_headers(token)
+    )
+    assert updated.status_code == 200
+    assert updated.json()["comparison_group_id"] == group_id
+
+    fetched_group = client.get(f"/comparison-groups/{group_id}", headers=auth_headers(token))
+    assert len(fetched_group.json()["watchers"]) == 1
+    assert fetched_group.json()["watchers"][0]["id"] == watcher["id"]
+
+
+def test_unassign_watcher_from_comparison_group(client):
+    token = signup(client)
+    group = client.post("/comparison-groups", json={"name": "Groupe"}, headers=auth_headers(token)).json()
+    watcher = _create_price_watcher(client, token)
+    client.patch(f"/watchers/{watcher['id']}", json={"comparison_group_id": group["id"]}, headers=auth_headers(token))
+
+    unassigned = client.patch(
+        f"/watchers/{watcher['id']}", json={"comparison_group_id": None}, headers=auth_headers(token)
+    )
+    assert unassigned.json()["comparison_group_id"] is None
+
+
+def test_comparison_group_isolation_between_users(client):
+    token_a = signup(client, email="a@example.com")
+    token_b = signup(client, email="b@example.com")
+    group = client.post("/comparison-groups", json={"name": "A's group"}, headers=auth_headers(token_a)).json()
+
+    listed_b = client.get("/comparison-groups", headers=auth_headers(token_b))
+    assert listed_b.json() == []
+
+    fetched_b = client.get(f"/comparison-groups/{group['id']}", headers=auth_headers(token_b))
+    assert fetched_b.status_code == 404
+
+
+def test_cannot_assign_watcher_to_another_users_group(client):
+    token_a = signup(client, email="a2@example.com")
+    token_b = signup(client, email="b2@example.com")
+    group_a = client.post("/comparison-groups", json={"name": "A's group"}, headers=auth_headers(token_a)).json()
+    watcher_b = _create_price_watcher(client, token_b)
+
+    response = client.patch(
+        f"/watchers/{watcher_b['id']}", json={"comparison_group_id": group_a["id"]}, headers=auth_headers(token_b)
+    )
+    assert response.status_code == 404
+
+
+def test_delete_comparison_group_detaches_watchers_without_deleting_them(client):
+    token = signup(client)
+    group = client.post("/comparison-groups", json={"name": "Groupe"}, headers=auth_headers(token)).json()
+    watcher = _create_price_watcher(client, token)
+    client.patch(f"/watchers/{watcher['id']}", json={"comparison_group_id": group["id"]}, headers=auth_headers(token))
+
+    deleted = client.delete(f"/comparison-groups/{group['id']}", headers=auth_headers(token))
+    assert deleted.status_code == 204
+
+    fetched_watcher = client.get(f"/watchers/{watcher['id']}", headers=auth_headers(token))
+    assert fetched_watcher.status_code == 200
+    assert fetched_watcher.json()["comparison_group_id"] is None
