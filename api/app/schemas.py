@@ -30,10 +30,17 @@ class UserSettingsUpdate(BaseModel):
 class PriceConfig(BaseModel):
     type: Literal["price"] = "price"
     url: str
-    css_selector: str
+    mode: Literal["auto", "manual"] = "auto"
+    css_selector: str | None = None
     currency: str = "EUR"
     stock_selector: str | None = None
     promo_selector: str | None = None
+
+    @model_validator(mode="after")
+    def check_manual_mode_has_selector(self) -> "PriceConfig":
+        if self.mode == "manual" and not self.css_selector:
+            raise ValueError("css_selector is required when mode is 'manual'")
+        return self
 
 
 class TrendConfig(BaseModel):
@@ -104,6 +111,17 @@ class DigestResponse(BaseModel):
     generated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DetectProductRequest(BaseModel):
+    url: str
+
+
+class DetectProductResponse(BaseModel):
+    value: float
+    currency: str
+    in_stock: bool | None
+    method: str
 
 
 class NotificationResponse(BaseModel):

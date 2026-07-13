@@ -7,10 +7,38 @@ from sqlalchemy.orm import Session
 from ..auth import get_current_user
 from ..db import get_db
 from ..models import NotificationLog, Run, User, Watcher
-from ..schemas import NotificationResponse, RunResponse, WatcherCreate, WatcherResponse, WatcherUpdate
+from ..schemas import (
+    DetectProductRequest,
+    DetectProductResponse,
+    NotificationResponse,
+    RunResponse,
+    WatcherCreate,
+    WatcherResponse,
+    WatcherUpdate,
+)
 from ..storage_reader import read_gold_parquet_records
 
 router = APIRouter(prefix="/watchers", tags=["watchers"])
+
+
+@router.post("/detect", response_model=DetectProductResponse)
+def detect_product_preview(
+    payload: DetectProductRequest, current_user: User = Depends(get_current_user)
+) -> DetectProductResponse:
+    from ingestion.sources.product_detector import ProductNotDetectedError, detect_product
+
+    try:
+        result = detect_product(payload.url)
+    except ProductNotDetectedError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Impossible de charger cette page : {exc}"
+        ) from exc
+
+    return DetectProductResponse(
+        value=result["value"], currency=result["currency"], in_stock=result["in_stock"], method=result["method"]
+    )
 
 
 def _to_response(watcher: Watcher) -> WatcherResponse:

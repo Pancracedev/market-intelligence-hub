@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, BellRing, ShieldAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  BellRing,
+  ChevronDown,
+  PackageCheck,
+  PackageX,
+  ShieldAlert,
+  Sparkles,
+  Wand2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Select,
   SelectContent,
@@ -18,13 +28,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type DetectedProduct } from "@/lib/api";
 import Header from "@/components/Header";
 
 export default function NewProductPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [detecting, setDetecting] = useState(false);
+  const [detected, setDetected] = useState<DetectedProduct | null>(null);
+  const [detectionFailed, setDetectionFailed] = useState(false);
+
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [cssSelector, setCssSelector] = useState("");
   const [stockSelector, setStockSelector] = useState("");
   const [promoSelector, setPromoSelector] = useState("");
@@ -35,18 +50,50 @@ export default function NewProductPage() {
   const [alertOnPromo, setAlertOnPromo] = useState(true);
   const [loading, setLoading] = useState(false);
 
+  async function handleDetect() {
+    if (!url) {
+      toast.error("Indiquez d'abord une URL");
+      return;
+    }
+    setDetecting(true);
+    setDetected(null);
+    setDetectionFailed(false);
+    try {
+      const result = await api.detectProduct(url);
+      setDetected(result);
+      setCurrency(result.currency);
+    } catch (err) {
+      setDetectionFailed(true);
+      setAdvancedOpen(true);
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "Détection automatique impossible sur cette page — utilisez les options avancées."
+      );
+    } finally {
+      setDetecting(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const usingManualMode = advancedOpen && cssSelector.trim().length > 0;
+    if (!usingManualMode && !detected) {
+      toast.error("Détectez d'abord le prix, ou renseignez un sélecteur CSS dans les options avancées.");
+      return;
+    }
+
     setLoading(true);
     try {
       const product = await api.createProduct({
         name,
         url,
-        cssSelector,
+        mode: usingManualMode ? "manual" : "auto",
         currency,
         schedule,
-        stockSelector: stockSelector || undefined,
-        promoSelector: promoSelector || undefined,
+        cssSelector: usingManualMode ? cssSelector : undefined,
+        stockSelector: usingManualMode ? stockSelector || undefined : undefined,
+        promoSelector: usingManualMode ? promoSelector || undefined : undefined,
         alertPriceDropPct: alertPriceDropPct ? Number(alertPriceDropPct) : undefined,
         alertOnStockOut,
         alertOnPromo,
@@ -72,7 +119,8 @@ export default function NewProductPage() {
         <div className="mb-6">
           <h1 className="text-xl font-semibold tracking-tight">Suivre un nouveau produit</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Surveillez automatiquement le prix, le stock et les promotions d&apos;un produit chez un concurrent.
+            Collez simplement l&apos;URL de la page produit — on détecte automatiquement le prix et
+            le stock, sans configuration technique.
           </p>
         </div>
 
@@ -89,7 +137,7 @@ export default function NewProductPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Informations générales</CardTitle>
+              <CardTitle>Produit à surveiller</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
@@ -104,90 +152,134 @@ export default function NewProductPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="url">URL de la page produit</Label>
-                <Input
-                  id="url"
-                  type="url"
-                  required
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://marketplace.exemple.com/produit/42"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="url"
+                    type="url"
+                    required
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      setDetected(null);
+                      setDetectionFailed(false);
+                    }}
+                    placeholder="https://marketplace.exemple.com/produit/42"
+                  />
+                  <Button type="button" variant="outline" onClick={handleDetect} disabled={detecting}>
+                    <Sparkles className="h-4 w-4" />
+                    {detecting ? "Détection..." : "Détecter"}
+                  </Button>
+                </div>
               </div>
+
+              {detected && (
+                <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
+                  <span className="text-xl font-semibold tabular-nums text-emerald-900">
+                    {detected.value} {detected.currency}
+                  </span>
+                  {detected.in_stock === false ? (
+                    <span className="inline-flex items-center gap-1 text-red-700">
+                      <PackageX className="h-3.5 w-3.5" />
+                      Rupture de stock
+                    </span>
+                  ) : detected.in_stock === true ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                      <PackageCheck className="h-3.5 w-3.5" />
+                      En stock
+                    </span>
+                  ) : null}
+                  <span className="ml-auto text-xs text-emerald-700">Détecté automatiquement</span>
+                </div>
+              )}
+
+              {detectionFailed && (
+                <p className="text-sm text-amber-700">
+                  Aucune donnée structurée trouvée sur cette page. Ouvrez les options avancées
+                  ci-dessous pour indiquer manuellement où se trouve le prix.
+                </p>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Prix</CardTitle>
-              <CardDescription>
-                Le sélecteur CSS identifie l&apos;élément de la page qui affiche le prix — inspectez la
-                page produit chez le concurrent pour le trouver.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="cssSelector">Sélecteur CSS du prix</Label>
-                <Input
-                  id="cssSelector"
-                  required
-                  value={cssSelector}
-                  onChange={(e) => setCssSelector(e.target.value)}
-                  placeholder=".price, #product-price..."
-                  className="font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="currency">Devise</Label>
-                  <Input id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="schedule">Fréquence de vérification</Label>
-                  <Select value={schedule} onValueChange={(value) => setSchedule(value ?? "@daily")}>
-                    <SelectTrigger id="schedule" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="@hourly">Toutes les heures</SelectItem>
-                      <SelectItem value="@daily">Tous les jours</SelectItem>
-                      <SelectItem value="@weekly">Toutes les semaines</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <Card>
+              <CardHeader
+                className="cursor-pointer select-none"
+                onClick={() => setAdvancedOpen((open) => !open)}
+              >
+                <CardTitle className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <Wand2 className="h-4 w-4" />
+                    Options avancées
+                    <span className="font-normal text-muted-foreground">
+                      (pour les cas où la détection automatique ne suffit pas)
+                    </span>
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+                </CardTitle>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Renseignez un sélecteur CSS pour forcer une extraction manuelle du prix (utile si
+                    la détection automatique se trompe ou ne trouve rien).
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cssSelector">Sélecteur CSS du prix</Label>
+                    <Input
+                      id="cssSelector"
+                      value={cssSelector}
+                      onChange={(e) => setCssSelector(e.target.value)}
+                      placeholder=".price, #product-price..."
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="stockSelector">Sélecteur CSS du stock / disponibilité</Label>
+                    <Input
+                      id="stockSelector"
+                      value={stockSelector}
+                      onChange={(e) => setStockSelector(e.target.value)}
+                      placeholder=".availability, #stock-status..."
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="promoSelector">Sélecteur CSS du prix barré (avant promo)</Label>
+                    <Input
+                      id="promoSelector"
+                      value={promoSelector}
+                      onChange={(e) => setPromoSelector(e.target.value)}
+                      placeholder=".was-price, .price--strikethrough..."
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="currency">Devise</Label>
+                      <Input id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           <Card>
             <CardHeader>
-              <CardTitle>
-                Stock et promotions <span className="font-normal text-muted-foreground">(optionnel)</span>
-              </CardTitle>
-              <CardDescription>
-                Ajoutez ces sélecteurs pour être alerté d&apos;une rupture de stock ou d&apos;une promotion.
-              </CardDescription>
+              <CardTitle>Fréquence de vérification</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="stockSelector">Sélecteur CSS du stock / disponibilité</Label>
-                <Input
-                  id="stockSelector"
-                  value={stockSelector}
-                  onChange={(e) => setStockSelector(e.target.value)}
-                  placeholder=".availability, #stock-status..."
-                  className="font-mono"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="promoSelector">Sélecteur CSS du prix barré (avant promo)</Label>
-                <Input
-                  id="promoSelector"
-                  value={promoSelector}
-                  onChange={(e) => setPromoSelector(e.target.value)}
-                  placeholder=".was-price, .price--strikethrough..."
-                  className="font-mono"
-                />
-              </div>
+            <CardContent>
+              <Select value={schedule} onValueChange={(value) => setSchedule(value ?? "@daily")}>
+                <SelectTrigger id="schedule" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="@hourly">Toutes les heures</SelectItem>
+                  <SelectItem value="@daily">Tous les jours</SelectItem>
+                  <SelectItem value="@weekly">Toutes les semaines</SelectItem>
+                </SelectContent>
+              </Select>
             </CardContent>
           </Card>
 

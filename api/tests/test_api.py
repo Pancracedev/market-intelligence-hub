@@ -206,6 +206,55 @@ def test_generate_digest_now_returns_created_digest(client, monkeypatch):
     assert response.json()["content"] == "Résumé test."
 
 
+def test_create_watcher_auto_mode_without_css_selector(client):
+    token = signup(client)
+    payload = {
+        "watcher_type": "price",
+        "name": "Produit simple",
+        "config": {"type": "price", "url": "https://example.com/product"},
+    }
+    created = client.post("/watchers", json=payload, headers=auth_headers(token))
+    assert created.status_code == 201, created.text
+    assert created.json()["config"]["mode"] == "auto"
+
+
+def test_create_watcher_manual_mode_requires_css_selector(client):
+    token = signup(client)
+    payload = {
+        "watcher_type": "price",
+        "name": "Produit avancé",
+        "config": {"type": "price", "url": "https://example.com/product", "mode": "manual"},
+    }
+    response = client.post("/watchers", json=payload, headers=auth_headers(token))
+    assert response.status_code == 422
+
+
+def test_detect_product_success(client, monkeypatch):
+    monkeypatch.setattr(
+        "ingestion.sources.product_detector.detect_product",
+        lambda url: {"value": 89.9, "currency": "EUR", "in_stock": True, "method": "json-ld"},
+    )
+
+    token = signup(client)
+    response = client.post("/watchers/detect", json={"url": "https://example.com/product"}, headers=auth_headers(token))
+    assert response.status_code == 200, response.text
+    assert response.json()["value"] == 89.9
+    assert response.json()["method"] == "json-ld"
+
+
+def test_detect_product_not_found_returns_422(client, monkeypatch):
+    from ingestion.sources.product_detector import ProductNotDetectedError
+
+    def _raise(url):
+        raise ProductNotDetectedError("nothing found")
+
+    monkeypatch.setattr("ingestion.sources.product_detector.detect_product", _raise)
+
+    token = signup(client)
+    response = client.post("/watchers/detect", json={"url": "https://example.com/product"}, headers=auth_headers(token))
+    assert response.status_code == 422
+
+
 def test_watcher_type_config_mismatch_rejected(client):
     token = signup(client)
     payload = {

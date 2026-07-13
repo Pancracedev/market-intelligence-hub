@@ -1,3 +1,5 @@
+import responses
+
 from ingestion import digest
 
 
@@ -48,9 +50,36 @@ def test_fallback_digest_empty():
     assert "Aucun produit actif" in text
 
 
-def test_call_llm_returns_none_without_api_key(monkeypatch):
+def test_call_llm_returns_none_without_any_api_key(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert digest._call_llm("some prompt") is None
+
+
+@responses.activate
+def test_call_llm_prefers_groq_when_configured(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "fake-groq-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-anthropic-key")
+    responses.add(
+        responses.POST,
+        digest.GROQ_API_URL,
+        json={"choices": [{"message": {"content": "Résumé via Groq."}}]},
+        status=200,
+    )
+
+    result = digest._call_llm("some prompt")
+
+    assert result == "Résumé via Groq."
+
+
+def test_call_groq_returns_none_without_api_key(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    assert digest._call_groq("some prompt") is None
+
+
+def test_call_anthropic_returns_none_without_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert digest._call_anthropic("some prompt") is None
 
 
 def test_generate_weekly_digest_returns_none_without_active_watchers(monkeypatch):

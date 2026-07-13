@@ -4,9 +4,9 @@ This is the "interpretation layer" on top of the existing pipeline - rather than
 listing deltas, it asks an LLM to read the week's activity across all of a user's watchers
 and write a short, decision-oriented summary (what changed, what matters most, what to do).
 
-Falls back to a plain templated summary (no LLM) if ANTHROPIC_API_KEY isn't configured,
-the same way notifications.send_email is a documented no-op without SMTP - the feature
-degrades gracefully rather than failing the pipeline.
+Provider priority: Groq (free tier, no billing required) -> Anthropic (if configured) ->
+plain templated summary (no LLM at all). Each step degrades gracefully rather than failing
+the pipeline, the same way notifications.send_email is a documented no-op without SMTP.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 
+import requests
 from sqlalchemy import text
 
 from .db import get_app_db_engine
@@ -21,7 +22,9 @@ from .notifications import send_email
 from .storage import ensure_bucket, get_bytes, get_client, read_parquet_bytes
 
 GOLD_BUCKET = os.environ.get("MINIO_BUCKET_GOLD", "gold")
-DIGEST_MODEL = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-haiku-4-5-20251001")
+ANTHROPIC_DIGEST_MODEL = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-haiku-4-5-20251001")
+GROQ_DIGEST_MODEL = os.environ.get("GROQ_DIGEST_MODEL", "llama-3.3-70b-versatile")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DIGEST_WINDOW_DAYS = 7
 
 
@@ -143,7 +146,26 @@ def _fallback_digest(digest_data: dict) -> str:
     return "Résumé de la semaine :\n" + "\n".join(lines)
 
 
-def _call_llm(prompt: str) -> str | None:
+def _call_groq(prompt: str) -> str | None:
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+
+    response = requests.post(
+        GROQ_API_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "model": GROQ_DIGEST_MODEL,
+            "max_tokens": 400,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
+
+
+def _call_anthropic(prompt: str) -> str | None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
@@ -152,11 +174,16 @@ def _call_llm(prompt: str) -> str | None:
 
     client = Anthropic(api_key=api_key)
     response = client.messages.create(
-        model=DIGEST_MODEL,
+        model=ANTHROPIC_DIGEST_MODEL,
         max_tokens=400,
         messages=[{"role": "user", "content": prompt}],
     )
     return "".join(block.text for block in response.content if block.type == "text").strip()
+
+
+def _call_llm(prompt: str) -> str | None:
+    """Groq first (free tier, no billing required), then Anthropic if configured."""
+    return _call_groq(prompt) or _call_anthropic(prompt)
 
 
 def _log_digest(user_id: int, content: str) -> dict:

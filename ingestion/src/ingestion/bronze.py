@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from .sources.eurostat import fetch_dataset
 from .sources.price_scraper import fetch_price
+from .sources.product_detector import detect_product
 from .storage import ensure_bucket, get_client, put_json
 
 BRONZE_BUCKET = os.environ.get("MINIO_BUCKET_BRONZE", "bronze")
@@ -32,7 +33,31 @@ def ingest_eurostat_to_bronze(
     return key
 
 
-def ingest_price_to_bronze(
+def ingest_price_auto_to_bronze(watcher_id: int, url: str, run_ts: str) -> str:
+    """Auto-detect price/stock from structured data (JSON-LD/Open Graph/microdata) - no
+    CSS selector required, for users who don't know what one is."""
+    detected = detect_product(url)
+
+    client = get_client()
+    ensure_bucket(client, BRONZE_BUCKET)
+
+    payload = {
+        "url": url,
+        "value": detected["value"],
+        "currency": detected["currency"],
+        "in_stock": detected["in_stock"],
+        "detection_method": detected["method"],
+        "original_value": None,
+        "is_promo": False,
+        "discount_pct": None,
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
+    }
+    key = f"price/{watcher_id}/{run_ts}.json"
+    put_json(client, BRONZE_BUCKET, key, payload)
+    return key
+
+
+def ingest_price_manual_to_bronze(
     watcher_id: int,
     url: str,
     css_selector: str,
@@ -41,8 +66,8 @@ def ingest_price_to_bronze(
     stock_selector: str | None = None,
     promo_selector: str | None = None,
 ) -> str:
-    """Scrape a user-supplied product page (price, and optionally stock/promo) and store
-    the raw extracted values in the bronze zone."""
+    """Scrape a user-supplied product page via an explicit CSS selector (advanced mode) and
+    store the raw extracted values in the bronze zone."""
     record = fetch_price(
         url,
         css_selector,
@@ -83,13 +108,15 @@ def ingest_watcher_to_bronze(watcher: dict, run_ts: str) -> str:
             watcher_id, config["dataset_code"], run_ts, filters=config.get("filters")
         )
     if watcher_type == "price":
-        return ingest_price_to_bronze(
-            watcher_id,
-            config["url"],
-            config["css_selector"],
-            run_ts,
-            currency=config.get("currency", "EUR"),
-            stock_selector=config.get("stock_selector"),
-            promo_selector=config.get("promo_selector"),
-        )
+        if config.get("mode", "auto") == "manual":
+            return ingest_price_manual_to_bronze(
+                watcher_id,
+                config["url"],
+                config["css_selector"],
+                run_ts,
+                currency=config.get("currency", "EUR"),
+                stock_selector=config.get("stock_selector"),
+                promo_selector=config.get("promo_selector"),
+            )
+        return ingest_price_auto_to_bronze(watcher_id, config["url"], run_ts)
     raise ValueError(f"Unsupported watcher_type for bronze ingestion: {watcher_type!r}")

@@ -116,11 +116,20 @@ Chaque notification effectivement envoyée est journalisée dans `notifications_
 
 1. `get_users_with_active_watchers()` liste les utilisateurs éligibles (≥1 watcher actif) — audience du DAG `airflow/dags/weekly_digest.py` (`@weekly`, dynamic task mapping, un digest par utilisateur).
 2. `collect_digest_data(user_id, since)` rassemble, pour chaque watcher : le dernier résumé Gold (prix, stock, promo), le nombre de vérifications sur la fenêtre, et les alertes envoyées (`notifications_log`) sur la même fenêtre.
-3. `render_prompt(...)` construit un prompt structuré ; `_call_llm(...)` appelle Claude (modèle configurable via `ANTHROPIC_DIGEST_MODEL`, par défaut `claude-haiku-4-5` pour un coût minimal) pour produire une synthèse de 3 à 5 phrases, orientée décision plutôt que description.
-4. Si `ANTHROPIC_API_KEY` n'est pas configurée, `_fallback_digest(...)` produit un résumé factuel simple (sans IA) — le pipeline ne casse jamais par absence de clé, même comportement que l'e-mail sans SMTP.
+3. `render_prompt(...)` construit un prompt structuré ; `_call_llm(...)` essaie **Groq** en premier (gratuit, sans facturation — modèle configurable via `GROQ_DIGEST_MODEL`, par défaut `llama-3.3-70b-versatile`), puis **Anthropic** si configuré (`ANTHROPIC_DIGEST_MODEL`, défaut `claude-haiku-4-5`), pour produire une synthèse de 3 à 5 phrases orientée décision plutôt que description.
+4. Si aucune clé n'est configurée, `_fallback_digest(...)` produit un résumé factuel simple (sans IA) — le pipeline ne casse jamais par absence de clé, même comportement que l'e-mail sans SMTP.
 5. Le résultat est envoyé par email et journalisé dans `digest_log`, exposé via `GET /digests` (historique) et `POST /digests/generate` (génération à la demande, utile pour tester sans attendre la semaine).
 
-## 13. Limites connues et évolutions prévues
+## 13. Détection automatique du prix (sans sélecteur CSS)
+
+Demander un sélecteur CSS à un utilisateur non technique est le principal point de friction du produit. `ingestion/src/ingestion/sources/product_detector.py` lit plutôt les données structurées que la plupart des sites e-commerce publient déjà pour le référencement (Google Shopping, rich snippets) :
+1. **JSON-LD** (`<script type="application/ld+json">`, `@type: Product`) — la source la plus fiable, gère aussi les documents `@graph`.
+2. **Open Graph** (`product:price:amount`, `product:availability`) en repli.
+3. **Microdata** (`itemprop="price"`) en dernier repli.
+
+`PriceConfig.mode` vaut `"auto"` par défaut (juste une URL, pas de sélecteur) ou `"manual"` (comportement v1, sélecteur CSS explicite requis) pour les sites sans aucune donnée structurée. Le frontend propose un bouton "Détecter" (`POST /watchers/detect`) qui affiche un aperçu avant la création du watcher, avec un panneau "Options avancées" repliable en cas d'échec de la détection. La détection de promotion reste réservée au mode manuel (`promo_selector`) faute de standard schema.org fiable pour le prix barré — en mode auto, une baisse de prix est déjà couverte par l'alerte `alert_price_drop_pct` existante.
+
+## 14. Limites connues et évolutions prévues
 
 - Watcher `trend` (Google Trends) : schéma prêt, pipeline non câblé.
 - Isolation par API seulement (pas de Row-Level Security Postgres).

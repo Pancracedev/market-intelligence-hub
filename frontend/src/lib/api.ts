@@ -60,10 +60,18 @@ export interface CurrentUser {
 export interface ProductConfig {
   type: "price";
   url: string;
-  css_selector: string;
+  mode: "auto" | "manual";
+  css_selector?: string | null;
   currency: string;
   stock_selector?: string | null;
   promo_selector?: string | null;
+}
+
+export interface DetectedProduct {
+  value: number;
+  currency: string;
+  in_stock: boolean | null;
+  method: "json-ld" | "open-graph" | "microdata";
 }
 
 export interface Product {
@@ -132,9 +140,10 @@ export interface Digest {
 export interface CreateProductInput {
   name: string;
   url: string;
-  cssSelector: string;
+  mode: "auto" | "manual";
   currency: string;
   schedule: string;
+  cssSelector?: string;
   stockSelector?: string;
   promoSelector?: string;
   alertPriceDropPct?: number;
@@ -179,13 +188,16 @@ export const api = {
         config: {
           type: "price",
           url: input.url,
-          css_selector: input.cssSelector,
+          mode: input.mode,
+          css_selector: input.mode === "manual" ? input.cssSelector : null,
           currency: input.currency,
           stock_selector: input.stockSelector || null,
           promo_selector: input.promoSelector || null,
         },
       }),
     }),
+
+  detectProduct: (url: string) => request<DetectedProduct>("/watchers/detect", { method: "POST", body: JSON.stringify({ url }) }),
 
   deleteProduct: (id: number) => request<void>(`/watchers/${id}`, { method: "DELETE" }),
 
