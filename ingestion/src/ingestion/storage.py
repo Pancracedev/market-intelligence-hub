@@ -15,12 +15,16 @@ def get_client():
     access_key = os.environ.get("MINIO_ROOT_USER", "minioadmin")
     secret_key = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin123")
     scheme = "https" if os.environ.get("MINIO_SECURE", "false").lower() == "true" else "http"
+    # Cloudflare R2 (and other non-MinIO S3-compatible providers) require a region even
+    # though they don't use it for routing; R2 itself expects the literal value "auto".
+    region = os.environ.get("STORAGE_REGION", "us-east-1")
 
     return boto3.client(
         "s3",
         endpoint_url=f"{scheme}://{endpoint}",
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
+        region_name=region,
         config=Config(signature_version="s3v4"),
     )
 

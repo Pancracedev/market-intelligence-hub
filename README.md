@@ -64,7 +64,9 @@ Chaque watcher a sa propre fréquence (`schedule`) et ses données sont isolées
 
 Détails complets, choix techniques justifiés et flux de données : [docs/DAT.md](docs/DAT.md).
 
-Déploiement gratuit en production (Oracle Cloud Always Free) : [docs/DEPLOY.md](docs/DEPLOY.md).
+Déploiement gratuit en production : [docs/DEPLOY.md](docs/DEPLOY.md) (VM Oracle Cloud Always
+Free) ou [docs/DEPLOY_SERVERLESS.md](docs/DEPLOY_SERVERLESS.md) (Neon + Cloudflare R2 +
+GitLab CI + Vercel + Render, sans aucun serveur à gérer).
 
 ## Pipeline de données (par watcher)
 

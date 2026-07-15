@@ -12,5 +12,9 @@ def get_app_db_engine() -> Engine:
     host = os.environ.get("APP_DB_HOST", "localhost")
     port = os.environ.get("APP_DB_PORT", "5432")
     db = os.environ.get("APP_DB_NAME", "market_intelligence")
-    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
-    return create_engine(url)
+    # "prefer" uses TLS when the server offers it (e.g. Neon, which requires it) and falls
+    # back to plaintext otherwise (e.g. the local docker-compose Postgres) — one default
+    # works for both without needing separate config per environment.
+    sslmode = os.environ.get("APP_DB_SSLMODE", "prefer")
+    url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}?sslmode={sslmode}"
+    return create_engine(url, pool_pre_ping=True)

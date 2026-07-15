@@ -1,0 +1,59 @@
+# GitLab CI/CD — mirrors .github/workflows/ci.yml for lint/tests, and additionally
+# replaces the Airflow scheduler with GitLab Scheduled Pipelines (Build > Pipeline
+# schedules in the GitLab UI) for the serverless deployment path. See
+# docs/DEPLOY_SERVERLESS.md for how to configure the two schedules.
+
+stages:
+  - check
+  - run
+
+default:
+  image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+
+lint-ingestion:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - cd ingestion && uv sync && uv run ruff check src tests
+
+lint-api:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - cd api && uv sync && uv run ruff check app tests
+
+test-ingestion:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - cd ingestion && uv sync && uv run pytest tests -v
+
+test-api:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "schedule"
+  script:
+    - cd api && uv sync && PYTHONPATH=. uv run pytest tests -v
+
+# --- Scheduled jobs (serverless replacement for the Airflow scheduler) ---
+#
+# Each of these only runs inside a GitLab Scheduled Pipeline, selected by the
+# SCHEDULE_TASK CI/CD variable set on that schedule ("watchers" or "digest") —
+# so a single hourly/weekly schedule definition triggers exactly one of them.
+
+run-watchers:
+  stage: run
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TASK == "watchers"
+  script:
+    - cd ingestion && uv sync --no-dev && uv run python -m ingestion.cli run-watchers
+
+run-digest:
+  stage: run
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TASK == "digest"
+  script:
+    - cd ingestion && uv sync --no-dev && uv run python -m ingestion.cli run-digest

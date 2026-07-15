@@ -1,0 +1,64 @@
+# Render Blueprint — deploys only the API as a free web service, using the
+# existing api/Dockerfile. Connect this repo (via GitLab) on render.com and
+# Render detects this file automatically. Fill in the *_API_KEY / SMTP_* /
+# JWT_SECRET_KEY values yourself in the Render dashboard (Environment tab) —
+# never commit real secrets here. See docs/DEPLOY_SERVERLESS.md.
+services:
+  - type: web
+    name: market-intelligence-hub-api
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_DB_HOST
+        sync: false
+      - key: APP_DB_PORT
+        value: "5432"
+      - key: APP_DB_USER
+        sync: false
+      - key: APP_DB_PASSWORD
+        sync: false
+      - key: APP_DB_NAME
+        sync: false
+      - key: APP_DB_SSLMODE
+        value: require
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_SECURE
+        value: "true"
+      - key: MINIO_ROOT_USER
+        sync: false
+      - key: MINIO_ROOT_PASSWORD
+        sync: false
+      - key: MINIO_BUCKET_GOLD
+        value: gold
+      - key: STORAGE_REGION
+        value: auto
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: SEED_DEMO_USER
+        value: "false"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "true"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_DIGEST_MODEL
+        value: llama-3.3-70b-versatile
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_DIGEST_MODEL
+        value: claude-haiku-4-5-20251001
