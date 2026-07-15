@@ -64,6 +64,8 @@ Chaque watcher a sa propre fréquence (`schedule`) et ses données sont isolées
 
 Détails complets, choix techniques justifiés et flux de données : [docs/DAT.md](docs/DAT.md).
 
+Déploiement gratuit en production (Oracle Cloud Always Free) : [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Pipeline de données (par watcher)
 
 1. **Ingestion** : selon le type de watcher — scraping du prix (requests + BeautifulSoup4, robots.txt + rate-limit) ou appel à l'API Eurostat — avec retries/backoff sur les erreurs transitoires.

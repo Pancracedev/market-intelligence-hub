@@ -1,0 +1,29 @@
+# Override de production — à combiner avec docker-compose.yml, jamais utilisé seul :
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# Ajoute uniquement un reverse proxy Caddy (HTTPS automatique) en point d'entrée
+# public sur les ports 80/443. Les autres services restent liés à 127.0.0.1 côté
+# hôte (voir docker-compose.yml) et ne sont joignables par Caddy que via le réseau
+# Docker interne mih-network.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - api
+    networks:
+      - mih-network
+
+volumes:
+  caddy_data:
+  caddy_config:

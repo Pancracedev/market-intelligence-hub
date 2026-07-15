@@ -1,0 +1,17 @@
+# Reverse proxy de production — HTTPS automatique (Let's Encrypt) via Caddy.
+#
+# Remplacez les deux domaines ci-dessous par les vôtres (sous-domaines d'un même
+# nom de domaine, ex: app.mondomaine.com et api.mondomaine.com), puis pointez-les
+# tous les deux (enregistrements DNS de type A) vers l'IP publique de la VM.
+#
+# Airflow et la console MinIO ne sont volontairement PAS exposés ici : ce sont des
+# outils d'administration, pas des services destinés aux utilisateurs finaux. Pour
+# y accéder en production, utilisez un tunnel SSH (voir docs/DEPLOY.md).
+
+app.example.com {
+	reverse_proxy frontend:3000
+}
+
+api.example.com {
+	reverse_proxy api:8000
+}

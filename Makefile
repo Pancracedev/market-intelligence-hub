@@ -1,10 +1,16 @@
-.PHONY: up down logs ps build sync test test-ingestion test-api lint dag-trigger clean
+.PHONY: up down up-prod down-prod logs ps build sync test test-ingestion test-api lint dag-trigger clean
 
 up:
 	docker compose up -d --build
 
 down:
 	docker compose down
+
+up-prod:
+	docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+
+down-prod:
+	docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml down
 
 clean:
 	docker compose down -v
