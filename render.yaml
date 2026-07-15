@@ -38,8 +38,15 @@ services:
         value: auto
       - key: JWT_SECRET_KEY
         sync: false
+      # Shareable demo account, on by default here since this is a showcase deployment.
+      # Set DEMO_USER_EMAIL/DEMO_USER_PASSWORD yourself below to something other than the
+      # repo's local-dev default (demo@example.com / demo12345) before going live.
       - key: SEED_DEMO_USER
-        value: "false"
+        value: "true"
+      - key: DEMO_USER_EMAIL
+        sync: false
+      - key: DEMO_USER_PASSWORD
+        sync: false
       - key: CORS_ORIGINS
         sync: false
       - key: SMTP_HOST

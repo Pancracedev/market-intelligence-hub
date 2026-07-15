@@ -4,7 +4,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base, User
-from app.seed import DEMO_EMAIL, ensure_demo_user
+from app.seed import ensure_demo_user
+
+DEMO_EMAIL = "demo@example.com"
 
 
 @pytest.fixture()
@@ -43,3 +45,14 @@ def test_ensure_demo_user_skipped_when_disabled(db_session, monkeypatch):
 
     user = db_session.execute(select(User).where(User.email == DEMO_EMAIL)).scalar_one_or_none()
     assert user is None
+
+
+def test_ensure_demo_user_respects_email_override(db_session, monkeypatch):
+    monkeypatch.setenv("SEED_DEMO_USER", "true")
+    monkeypatch.setenv("DEMO_USER_EMAIL", "showcase@example.com")
+    ensure_demo_user(db_session)
+
+    user = db_session.execute(
+        select(User).where(User.email == "showcase@example.com")
+    ).scalar_one_or_none()
+    assert user is not None
