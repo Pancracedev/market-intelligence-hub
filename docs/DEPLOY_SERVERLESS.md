@@ -69,20 +69,20 @@ APP_DB_SSLMODE=require
 
 Le fichier [.gitlab-ci.yml](../.gitlab-ci.yml) contient déjà deux jobs `run-watchers`
 et `run-digest`, qui n'agissent que lorsqu'ils sont déclenchés par un **pipeline
-programmé** (`Build → Pipeline schedules` dans GitLab).
+programmé** (`Build → Pipeline schedules` dans GitLab). Un seul schedule horaire
+suffit pour les deux — pas besoin de variable spécifique au schedule (l'interface/API
+GitLab pour ça s'est révélée peu fiable en pratique) : `run-watchers` traite de toute
+façon uniquement les watchers dont c'est l'heure (via leur propre champ `schedule`),
+et `run-digest` vérifie lui-même s'il est lundi 6h UTC avant de faire quoi que ce soit.
 
 1. **Settings → CI/CD → Variables** : ajoutez toutes les variables listées aux
    sections 1 et 2 ci-dessus, plus `GROQ_API_KEY` (et `ANTHROPIC_API_KEY` si vous
    l'utilisez), `SMTP_*` si vous voulez les emails. Cochez *Protect variable* si vos
    pipelines tournent uniquement sur `main`.
-2. **Build → Pipeline schedules → New schedule** — créez-en **deux** :
-   - Description `watchers`, cron `0 * * * *` (toutes les heures), branche `main`,
-     variable `SCHEDULE_TASK` = `watchers`.
-   - Description `digest`, cron `0 6 * * 1` (chaque lundi 6h), branche `main`,
-     variable `SCHEDULE_TASK` = `digest`.
-3. Testez immédiatement chaque schedule avec le bouton *Run pipeline schedule*
-   (icône ▶) pour vérifier que `run-watchers`/`run-digest` s'exécute sans attendre le
-   cron.
+2. **Build → Pipeline schedules → New schedule** — un seul suffit :
+   Description `hourly`, cron `0 * * * *` (toutes les heures), branche `main`.
+3. Testez immédiatement avec le bouton *Run pipeline schedule* (icône ▶) pour
+   vérifier que `run-watchers` s'exécute sans attendre le cron.
 
 ## 4. Vercel (frontend)
 
