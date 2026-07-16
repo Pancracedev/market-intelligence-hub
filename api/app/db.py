@@ -1,8 +1,11 @@
 import os
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+INIT_SQL_PATH = Path(__file__).resolve().parent.parent / "infra" / "postgres" / "init.sql"
 
 
 def _database_url() -> str:
@@ -27,3 +30,13 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def run_migrations() -> None:
+    """Applies infra/postgres/init.sql on startup - safe to run every time since every
+    statement in it is idempotent (CREATE TABLE/INDEX IF NOT EXISTS). Lets a fresh managed
+    Postgres (e.g. Neon) provision its own schema without a separate manual psql step.
+    """
+    sql = INIT_SQL_PATH.read_text()
+    with engine.begin() as conn:
+        conn.exec_driver_sql(sql)

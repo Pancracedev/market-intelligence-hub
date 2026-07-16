@@ -4,13 +4,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .db import SessionLocal
+from .db import SessionLocal, run_migrations
 from .routers import auth, comparison_groups, digests, watchers
 from .seed import ensure_demo_user
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    run_migrations()
     db = SessionLocal()
     try:
         ensure_demo_user(db)

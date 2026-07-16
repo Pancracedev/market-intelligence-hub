@@ -12,6 +12,7 @@ COPY api/pyproject.toml api/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY api/app ./app
+COPY infra/postgres/init.sql ./infra/postgres/init.sql
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
