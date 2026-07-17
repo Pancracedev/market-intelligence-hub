@@ -9,14 +9,16 @@ INIT_SQL_PATH = Path(__file__).resolve().parent.parent / "infra" / "postgres" / 
 
 
 def _database_url() -> str:
-    user = os.environ.get("APP_DB_USER", "app")
-    password = os.environ.get("APP_DB_PASSWORD", "app")
-    host = os.environ.get("APP_DB_HOST", "localhost")
-    port = os.environ.get("APP_DB_PORT", "5432")
-    db = os.environ.get("APP_DB_NAME", "market_intelligence")
+    # .strip() guards against a stray trailing newline/space from copy-pasting a value into
+    # a dashboard env var field.
+    user = os.environ.get("APP_DB_USER", "app").strip()
+    password = os.environ.get("APP_DB_PASSWORD", "app").strip()
+    host = os.environ.get("APP_DB_HOST", "localhost").strip()
+    port = os.environ.get("APP_DB_PORT", "5432").strip()
+    db = os.environ.get("APP_DB_NAME", "market_intelligence").strip()
     # "prefer" uses TLS when the server offers it (e.g. Neon, which requires it) and falls
     # back to plaintext otherwise (e.g. the local docker-compose Postgres).
-    sslmode = os.environ.get("APP_DB_SSLMODE", "prefer")
+    sslmode = os.environ.get("APP_DB_SSLMODE", "prefer").strip()
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}?sslmode={sslmode}"
 
 

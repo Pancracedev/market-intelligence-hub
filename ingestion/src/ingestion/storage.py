@@ -12,13 +12,16 @@ from botocore.exceptions import ClientError
 
 
 def get_client():
-    endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
-    access_key = os.environ.get("MINIO_ROOT_USER", "minioadmin")
-    secret_key = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin123")
-    scheme = "https" if os.environ.get("MINIO_SECURE", "false").lower() == "true" else "http"
+    # .strip() guards against a stray trailing newline/space from copy-pasting a value into
+    # a dashboard env var field - otherwise it ends up inside the signed auth header and
+    # every request fails with a cryptic "Invalid header value" error.
+    endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000").strip()
+    access_key = os.environ.get("MINIO_ROOT_USER", "minioadmin").strip()
+    secret_key = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin123").strip()
+    scheme = "https" if os.environ.get("MINIO_SECURE", "false").strip().lower() == "true" else "http"
     # Cloudflare R2 (and other non-MinIO S3-compatible providers) require a region even
     # though they don't use it for routing; R2 itself expects the literal value "auto".
-    region = os.environ.get("STORAGE_REGION", "us-east-1")
+    region = os.environ.get("STORAGE_REGION", "us-east-1").strip()
 
     return boto3.client(
         "s3",
