@@ -32,8 +32,11 @@ services:
         sync: false
       - key: MINIO_ROOT_PASSWORD
         sync: false
+      # Must match whatever bucket actually holds gold-zone data on your R2 account (see
+      # docs/DEPLOY_SERVERLESS.md) - "gold" is only correct for the local docker-compose
+      # MinIO setup, not for a real R2 deployment.
       - key: MINIO_BUCKET_GOLD
-        value: gold
+        sync: false
       - key: STORAGE_REGION
         value: auto
       - key: JWT_SECRET_KEY
