@@ -8,6 +8,7 @@ import os
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
 
 
 def get_client():
@@ -30,8 +31,15 @@ def get_client():
 
 
 def ensure_bucket(client, bucket: str) -> None:
-    existing = {b["Name"] for b in client.list_buckets().get("Buckets", [])}
-    if bucket not in existing:
+    # head_bucket (not list_buckets) so this works with an S3 token scoped to a single
+    # bucket (e.g. Cloudflare R2's per-bucket API tokens) - list_buckets is an
+    # account-wide operation such tokens are typically denied.
+    try:
+        client.head_bucket(Bucket=bucket)
+    except ClientError as exc:
+        status = exc.response.get("Error", {}).get("Code")
+        if status not in ("404", "NoSuchBucket"):
+            raise
         client.create_bucket(Bucket=bucket)
 
 
